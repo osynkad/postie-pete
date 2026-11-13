@@ -35,6 +35,7 @@ import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.loottracker.LootReceived;
+import net.runelite.client.util.Text;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -60,6 +61,14 @@ public class PostiePetePlugin extends Plugin
 		"(?i)(?:(?:Fight |Lap |Challenge |Corrupted challenge )?duration:|Subdued in|(?<!total )completion time:"
 			+ "|The Fractured Archive: Total completion time:) "
 			+ "(?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)</col>(?<newpb> \\(new personal best\\))?");
+
+	// "New item added to your collection log: Abyssal whip" (requires the in-game collection log chat notification)
+	private static final Pattern COLLECTION_LOG_PATTERN = Pattern.compile(
+		"New item added to your collection log: (?<item>.+)");
+
+	// "Congratulations, you've completed a hard combat task: Task Name (3 points)."
+	private static final Pattern COMBAT_ACHIEVEMENT_PATTERN = Pattern.compile(
+		"Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+?)(?: \\(\\d+ points?\\))?\\.?");
 
 	// The duration message arrives on the kill, the loot spawns after the death animation
 	private static final int KILL_TIME_MAX_AGE_TICKS = 30;
@@ -169,14 +178,39 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		Matcher matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
-		if (!matcher.find())
+		if (matcher.find())
+		{
+			lastKillTime = parseDuration(matcher.group("time"));
+			lastKillTimePersonalBest = matcher.group("newpb") != null;
+			lastKillTimeTick = client.getTickCount();
+			return;
+		}
+
+		Player localPlayer = client.getLocalPlayer();
+		if (localPlayer == null)
 		{
 			return;
 		}
 
-		lastKillTime = parseDuration(matcher.group("time"));
-		lastKillTimePersonalBest = matcher.group("newpb") != null;
-		lastKillTimeTick = client.getTickCount();
+		String message = Text.removeTags(event.getMessage());
+
+		matcher = COLLECTION_LOG_PATTERN.matcher(message);
+		if (matcher.matches())
+		{
+			postEvent(newEvent(PostieEvent.COLLECTION_LOG, localPlayer)
+				.itemName(matcher.group("item"))
+				.build());
+			return;
+		}
+
+		matcher = COMBAT_ACHIEVEMENT_PATTERN.matcher(message);
+		if (matcher.matches())
+		{
+			postEvent(newEvent(PostieEvent.COMBAT_ACHIEVEMENT, localPlayer)
+				.tier(matcher.group("tier"))
+				.task(matcher.group("task"))
+				.build());
+		}
 	}
 
 	/**

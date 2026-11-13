@@ -13,9 +13,11 @@ import lombok.Value;
 class PostieEvent
 {
 	static final String LOOT = "loot";
+	static final String COLLECTION_LOG = "collection_log";
+	static final String COMBAT_ACHIEVEMENT = "combat_achievement";
 
 	/**
-	 * "loot".
+	 * "loot", "collection_log" or "combat_achievement".
 	 */
 	String eventType;
 	String timestamp;
@@ -40,6 +42,21 @@ class PostieEvent
 	Boolean personalBest;
 	List<Drop> drops;
 	PlayerItems playerItems;
+
+	/**
+	 * Collection log: item name as shown in the chat message, e.g. "Abyssal whip".
+	 */
+	String itemName;
+
+	/**
+	 * Combat achievement: easy, medium, hard, elite, master or grandmaster.
+	 */
+	String tier;
+
+	/**
+	 * Combat achievement: task name, e.g. "Noxious Foe".
+	 */
+	String task;
 
 	@Value
 	static class Drop
