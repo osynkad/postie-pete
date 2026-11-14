@@ -134,7 +134,12 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		// Consumed even when loot isn't sent, so it can't be attached to a later kill
 		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		if (!config.sendLoot())
+		{
+			return;
+		}
 
 		postEvent(new LootEvent(common(localPlayer), npc.getName(), killTime,
 			killTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
@@ -156,6 +161,10 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		Double completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
+		if (!config.sendLoot())
+		{
+			return;
+		}
 
 		postEvent(new LootEvent(common(localPlayer), event.getName(), completionTime,
 			completionTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
@@ -189,12 +198,15 @@ public class PostiePetePlugin extends Plugin
 		matcher = COLLECTION_LOG_PATTERN.matcher(message);
 		if (matcher.matches())
 		{
-			postEvent(new CollectionLogEvent(common(localPlayer), matcher.group("item")));
+			if (config.sendCollectionLog())
+			{
+				postEvent(new CollectionLogEvent(common(localPlayer), matcher.group("item")));
+			}
 			return;
 		}
 
 		matcher = COMBAT_ACHIEVEMENT_PATTERN.matcher(message);
-		if (matcher.matches())
+		if (matcher.matches() && config.sendCombatAchievement())
 		{
 			postEvent(new CombatAchievementEvent(common(localPlayer),
 				matcher.group("tier").toLowerCase(), matcher.group("task")));

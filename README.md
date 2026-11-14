@@ -17,6 +17,15 @@ Content-Type: application/json
 
 Any `2xx` response counts as success. Failed requests are not retried.
 
+## Settings
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| **API URL** | empty | Base URL of the API that receives events. Nothing is sent while it is empty. |
+| **Loot** › **Send event** | on | Send `loot` events. |
+| **Collection log** › **Send event** | on | Send `collection_log` events. |
+| **Combat achievements** › **Send event** | on | Send `combat_achievement` events. |
+
 ## Events
 
 Every event is a flat JSON object. All events share the [common fields](#common-fields), and each event type adds its own fields. Use `eventType` to tell event types apart. Every field of an event type is always present; optional values are `null`, never left out.
