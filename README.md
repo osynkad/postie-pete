@@ -19,47 +19,89 @@ Any `2xx` response counts as success. Failed requests are not retried.
 
 ## Events
 
-Every event has **the same structure**, whatever its type. All fields are always present; fields that don't apply to an event type are `null`. Use `eventType` to tell events apart.
+Every event is a flat JSON object. All events share the [common fields](#common-fields), and each event type adds its own fields. Use `eventType` to tell event types apart. Every field of an event type is always present; optional values are `null`, never left out.
 
 | Event type | Sent when |
 | --- | --- |
-| `loot` | You receive loot: an NPC drop, a raid or reward chest, a clue casket etc. |
-| `collection_log` | A new item is added to your collection log |
-| `combat_achievement` | You complete a combat task |
+| [`loot`](#loot) | You receive loot: an NPC drop, a raid or reward chest, a clue casket etc. |
+| [`collection_log`](#collection_log) | A new item is added to your collection log |
+| [`combat_achievement`](#combat_achievement) | You complete a combat task |
 
-### Schema
+New event types and new fields may be added in later versions. Ignore event types and fields you don't recognise.
 
-| Field | Type | `loot` | `collection_log` | `combat_achievement` |
-| --- | --- | --- | --- | --- |
-| `eventType` | string | `"loot"` | `"collection_log"` | `"combat_achievement"` |
-| `timestamp` | string | ✓ | ✓ | ✓ |
-| `rsn` | string | ✓ | ✓ | ✓ |
-| `accountHash` | string | ✓ | ✓ | ✓ |
-| `source` | string \| null | ✓ | `null` | `null` |
-| `duration` | number \| null | ✓ or `null` | `null` | `null` |
-| `personalBest` | boolean \| null | ✓ | `null` | `null` |
-| `drops` | array \| null | ✓ | `null` | `null` |
-| `playerItems` | object | ✓ | ✓ | ✓ |
-| `itemName` | string \| null | `null` | ✓ | `null` |
-| `tier` | string \| null | `null` | `null` | ✓ |
-| `task` | string \| null | `null` | `null` | ✓ |
+### Common fields
 
-### Fields
+| Field | Type | Description |
+| --- | --- | --- |
+| `eventType` | string | `"loot"`, `"collection_log"` or `"combat_achievement"`. |
+| `timestamp` | string | When the event happened, ISO 8601 in UTC to the second, e.g. `"2026-11-12T20:35:00Z"`. |
+| `rsn` | string | The player's current display name. Changes when the player changes name. |
+| `accountHash` | string | Stable account identifier that survives name changes. Use this, not `rsn`, to identify a player. A string because it is a 64-bit number. |
+| `playerItems` | object | The player's items at the time of the event. See [Player items](#player-items). |
 
-| Field | Description |
-| --- | --- |
-| `eventType` | `"loot"`, `"collection_log"` or `"combat_achievement"`. |
-| `timestamp` | When the event happened, ISO 8601 in UTC to the second, e.g. `"2026-11-12T20:35:00Z"`. |
-| `rsn` | The player's current display name. Changes when the player changes name. |
-| `accountHash` | Stable account identifier that survives name changes. Use this, not `rsn`, to identify a player. |
-| `source` | Where the loot came from: the NPC name for drops (e.g. `"Vorkath"`), or RuneLite's Loot Tracker name for other loot (e.g. `"Fractured Archive"`, `"Barrows"`, `"Clue Scroll (Hard)"`). |
-| `duration` | Kill or completion time in seconds, e.g. `83.4`, as reported by the game. `null` when the game doesn't report one, which is the case for most non-boss NPCs. |
-| `personalBest` | `true` when the game reported a new personal best for `duration`, otherwise `false`. |
-| `drops` | The loot received, as a list of `{ "itemId": number, "quantity": number }`. |
-| `playerItems` | The player's items at the time of the event. See [Player items](#player-items). |
-| `itemName` | The collection log item name, e.g. `"Abyssal whip"`. The name only, no item ID. |
-| `tier` | Combat task tier, lower case: `"easy"`, `"medium"`, `"hard"`, `"elite"`, `"master"` or `"grandmaster"`. |
-| `task` | Combat task name, e.g. `"Noxious Foe"`. |
+### `loot`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `source` | string | Where the loot came from: the NPC name for drops (e.g. `"Vorkath"`), or RuneLite's Loot Tracker name for other loot (e.g. `"Fractured Archive"`, `"Barrows"`, `"Clue Scroll (Hard)"`). |
+| `duration` | number \| null | Kill or completion time in seconds, e.g. `83.4`, as reported by the game. `null` when the game doesn't report one, which is the case for most non-boss NPCs. |
+| `personalBest` | boolean | `true` when the game reported a new personal best for `duration`, otherwise `false`. |
+| `drops` | array | The loot received, as a list of `{ "itemId": number, "quantity": number }`. |
+
+```json
+{
+  "eventType": "loot",
+  "timestamp": "2026-11-12T20:35:00Z",
+  "rsn": "ExamplePlayer",
+  "accountHash": "-3412345678901234567",
+  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
+  "source": "Vorkath",
+  "duration": 83.4,
+  "personalBest": false,
+  "drops": [
+    { "itemId": 536, "quantity": 2 },
+    { "itemId": 995, "quantity": 15000 }
+  ]
+}
+```
+
+### `collection_log`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `itemName` | string | The collection log item name, e.g. `"Abyssal whip"`. The name only, no item ID. |
+
+```json
+{
+  "eventType": "collection_log",
+  "timestamp": "2026-11-12T20:35:00Z",
+  "rsn": "ExamplePlayer",
+  "accountHash": "-3412345678901234567",
+  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
+  "itemName": "Vorkath's head"
+}
+```
+
+### `combat_achievement`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `tier` | string | Combat task tier, lower case: `"easy"`, `"medium"`, `"hard"`, `"elite"`, `"master"` or `"grandmaster"`. |
+| `task` | string | Combat task name, e.g. `"Noxious Foe"`. |
+
+```json
+{
+  "eventType": "combat_achievement",
+  "timestamp": "2026-11-12T20:35:00Z",
+  "rsn": "ExamplePlayer",
+  "accountHash": "-3412345678901234567",
+  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
+  "tier": "hard",
+  "task": "Why Are You Running?"
+}
+```
+
+Field order in the JSON is not guaranteed.
 
 ### Player items
 
@@ -78,68 +120,6 @@ Every event has **the same structure**, whatever its type. All fields are always
 | `inventory` | Inventory items, keyed by slot index `"0"` to `"27"`, left to right and top to bottom. Empty slots are left out. |
 | `rune_pouch` | Runes in the rune pouch (3 slots, or 4 for the divine rune pouch), or `null` if empty. |
 | `quiver` | The extra ammo slot from Dizana's quiver or the bolt pouch, or `null` if empty. |
-
-## Examples
-
-### `loot`
-
-```json
-{
-  "eventType": "loot",
-  "timestamp": "2026-11-12T20:35:00Z",
-  "rsn": "ExamplePlayer",
-  "accountHash": "-3412345678901234567",
-  "source": "Vorkath",
-  "duration": 83.4,
-  "personalBest": false,
-  "drops": [
-    { "itemId": 536, "quantity": 2 },
-    { "itemId": 995, "quantity": 15000 }
-  ],
-  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
-  "itemName": null,
-  "tier": null,
-  "task": null
-}
-```
-
-### `collection_log`
-
-```json
-{
-  "eventType": "collection_log",
-  "timestamp": "2026-11-12T20:35:00Z",
-  "rsn": "ExamplePlayer",
-  "accountHash": "-3412345678901234567",
-  "source": null,
-  "duration": null,
-  "personalBest": null,
-  "drops": null,
-  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
-  "itemName": "Vorkath's head",
-  "tier": null,
-  "task": null
-}
-```
-
-### `combat_achievement`
-
-```json
-{
-  "eventType": "combat_achievement",
-  "timestamp": "2026-11-12T20:35:00Z",
-  "rsn": "ExamplePlayer",
-  "accountHash": "-3412345678901234567",
-  "source": null,
-  "duration": null,
-  "personalBest": null,
-  "drops": null,
-  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
-  "itemName": null,
-  "tier": "hard",
-  "task": "Why Are You Running?"
-}
-```
 
 ## Requirements
 

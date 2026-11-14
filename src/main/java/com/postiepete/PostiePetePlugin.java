@@ -112,7 +112,7 @@ public class PostiePetePlugin extends Plugin
 	@Override
 	protected void startUp() throws Exception
 	{
-		// serializeNulls so that fields that don't apply are sent as null instead of left out
+		// serializeNulls so that optional fields (e.g. a loot event's duration) are always present, as null
 		gson = baseGson.newBuilder().serializeNulls().create();
 		log.debug("Postie Pete started!");
 	}
@@ -136,12 +136,8 @@ public class PostiePetePlugin extends Plugin
 
 		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
 
-		postEvent(newEvent(PostieEvent.LOOT, localPlayer)
-			.source(npc.getName())
-			.duration(killTime)
-			.personalBest(killTime != null && lastKillTimePersonalBest)
-			.drops(toDrops(event.getItems()))
-			.build());
+		postEvent(new LootEvent(common(localPlayer), npc.getName(), killTime,
+			killTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
 	}
 
 	/**
@@ -161,12 +157,8 @@ public class PostiePetePlugin extends Plugin
 
 		Double completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
 
-		postEvent(newEvent(PostieEvent.LOOT, localPlayer)
-			.source(event.getName())
-			.duration(completionTime)
-			.personalBest(completionTime != null && lastKillTimePersonalBest)
-			.drops(toDrops(event.getItems()))
-			.build());
+		postEvent(new LootEvent(common(localPlayer), event.getName(), completionTime,
+			completionTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
 	}
 
 	@Subscribe
@@ -197,34 +189,28 @@ public class PostiePetePlugin extends Plugin
 		matcher = COLLECTION_LOG_PATTERN.matcher(message);
 		if (matcher.matches())
 		{
-			postEvent(newEvent(PostieEvent.COLLECTION_LOG, localPlayer)
-				.itemName(matcher.group("item"))
-				.build());
+			postEvent(new CollectionLogEvent(common(localPlayer), matcher.group("item")));
 			return;
 		}
 
 		matcher = COMBAT_ACHIEVEMENT_PATTERN.matcher(message);
 		if (matcher.matches())
 		{
-			postEvent(newEvent(PostieEvent.COMBAT_ACHIEVEMENT, localPlayer)
-				.tier(matcher.group("tier"))
-				.task(matcher.group("task"))
-				.build());
+			postEvent(new CombatAchievementEvent(common(localPlayer),
+				matcher.group("tier").toLowerCase(), matcher.group("task")));
 		}
 	}
 
 	/**
-	 * Starts an event with the fields every event type shares. Type-specific fields stay null
-	 * unless set on the returned builder.
+	 * Captures the fields every event type shares, at the moment the event happens.
 	 */
-	private PostieEvent.PostieEventBuilder newEvent(String eventType, Player localPlayer)
+	private PostieEvent.Common common(Player localPlayer)
 	{
-		return PostieEvent.builder()
-			.eventType(eventType)
-			.timestamp(Instant.now().truncatedTo(ChronoUnit.SECONDS).toString())
-			.rsn(localPlayer.getName())
-			.accountHash(accountHash())
-			.playerItems(getPlayerItems());
+		return new PostieEvent.Common(
+			Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(),
+			localPlayer.getName(),
+			accountHash(),
+			getPlayerItems());
 	}
 
 	/**
@@ -256,10 +242,10 @@ public class PostiePetePlugin extends Plugin
 		return seconds + Double.parseDouble(parts[parts.length - 1]);
 	}
 
-	private static List<PostieEvent.Drop> toDrops(Collection<ItemStack> items)
+	private static List<LootEvent.Drop> toDrops(Collection<ItemStack> items)
 	{
 		return items.stream()
-			.map(item -> new PostieEvent.Drop(item.getId(), item.getQuantity()))
+			.map(item -> new LootEvent.Drop(item.getId(), item.getQuantity()))
 			.collect(Collectors.toList());
 	}
 
