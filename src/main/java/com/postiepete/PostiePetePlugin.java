@@ -35,6 +35,7 @@ import net.runelite.api.gameval.VarClientID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.game.ItemManager;
@@ -156,6 +157,12 @@ public class PostiePetePlugin extends Plugin
 	@Inject
 	private ConfigManager configManager;
 
+	@Inject
+	private EventBus eventBus;
+
+	@Inject
+	private CollectionLogReader collectionLogReader;
+
 	private Gson gson;
 
 	private Double lastKillTime;
@@ -181,6 +188,8 @@ public class PostiePetePlugin extends Plugin
 
 		// serializeNulls so that optional fields (e.g. a loot event's duration) are always present, as null
 		gson = baseGson.newBuilder().serializeNulls().create();
+		collectionLogReader.setOnRead(this::onCollectionLogRead);
+		eventBus.register(collectionLogReader);
 		log.debug("Postie Pete started!");
 	}
 
@@ -194,6 +203,8 @@ public class PostiePetePlugin extends Plugin
 		fracturedArchive.reset();
 		collectionLogReady = false;
 		lastCollectionLogItemId = 0;
+		eventBus.unregister(collectionLogReader);
+		collectionLogReader.reset();
 		log.debug("Postie Pete stopped!");
 	}
 
@@ -461,6 +472,20 @@ public class PostiePetePlugin extends Plugin
 			postEvent(new CombatAchievementEvent(common(localPlayer),
 				matcher.group("tier").toLowerCase(), matcher.group("task")));
 		}
+	}
+
+	/**
+	 * The whole collection log was read after the player opened it.
+	 */
+	private void onCollectionLogRead(List<CollectionLogSnapshotEvent.Item> items, int obtainedSlots)
+	{
+		Player localPlayer = client.getLocalPlayer();
+		if (localPlayer == null || !config.sendCollectionLogSnapshot())
+		{
+			return;
+		}
+
+		postEvent(new CollectionLogSnapshotEvent(common(localPlayer), items, obtainedSlots));
 	}
 
 	/**

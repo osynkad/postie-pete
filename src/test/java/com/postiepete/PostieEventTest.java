@@ -6,7 +6,9 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
 
@@ -79,6 +81,32 @@ public class PostieEventTest
 	{
 		JsonObject loot = toJson(new LootEvent(COMMON, "Barrows", null, null, false, null, null, Collections.emptyList()));
 		assertEquals(true, loot.get("npcId").isJsonNull());
+	}
+
+	@Test
+	public void collectionLogSnapshotEventHasOnlySnapshotFields()
+	{
+		JsonObject json = toJson(new CollectionLogSnapshotEvent(COMMON,
+			Collections.singletonList(new CollectionLogSnapshotEvent.Item(4151, 3)), 1));
+
+		assertEquals(with(COMMON_FIELDS, "items", "obtainedSlots"), json.keySet());
+		assertEquals("collection_log_snapshot", json.get("eventType").getAsString());
+		JsonObject item = json.getAsJsonArray("items").get(0).getAsJsonObject();
+		assertEquals(set("itemId", "quantity"), item.keySet());
+		assertEquals(4151, item.get("itemId").getAsInt());
+		assertEquals(3, item.get("quantity").getAsInt());
+		assertEquals(1, json.get("obtainedSlots").getAsInt());
+	}
+
+	@Test
+	public void duplicateCollectionLogItemsCountAsOneSlot()
+	{
+		Map<Integer, Integer> items = new HashMap<>();
+		items.put(4151, 1);
+		items.put(12013, 1); // Prospector helmet
+		assertEquals(2, CollectionLogReader.countSlots(items));
+		items.put(29472, 1); // Prospector helmet, listed again on another page
+		assertEquals(2, CollectionLogReader.countSlots(items));
 	}
 
 	@Test

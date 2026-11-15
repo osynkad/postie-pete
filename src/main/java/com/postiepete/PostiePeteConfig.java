@@ -89,6 +89,20 @@ public interface PostiePeteConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "sendCollectionLogSnapshot",
+		name = "Send full log when opened",
+		description = "Send every item in your collection log each time you open it in game, so slots you got before"
+			+ " installing the plugin are included. Sent at most once per opening, and only if something changed.",
+		warning = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers",
+		section = collectionLogSection,
+		position = 1
+	)
+	default boolean sendCollectionLogSnapshot()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "sendCombatAchievement",
 		name = "Send event",
 		description = "Send a combat achievement event when you complete a combat task",
