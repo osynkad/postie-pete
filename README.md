@@ -25,6 +25,7 @@ Any `2xx` response counts as success. Failed requests are not retried.
 | **Loot** › **Send event** | on | Send `loot` events. |
 | **Loot** › **Send gear** | on | Send your equipment, inventory, rune pouch and quiver from the start of the trip with boss kills, as [`playerItems`](#player-items). When off, `playerItems` is always `null`. |
 | **Collection log** › **Send event** | on | Send `collection_log` events. |
+| **Collection log** › **Send full log when opened** | off | Send a `collection_log_snapshot` event each time you open the collection log in game. |
 | **Combat achievements** › **Send event** | on | Send `combat_achievement` events. |
 
 ## Events
@@ -35,6 +36,7 @@ Every event is a JSON object. All events share the [common fields](#common-field
 | --- | --- |
 | [`loot`](#loot) | You receive loot: an NPC drop, a raid or reward chest, a clue casket etc. |
 | [`collection_log`](#collection_log) | A new item is added to your collection log |
+| [`collection_log_snapshot`](#collection_log_snapshot) | You open the collection log (opt-in, off by default) |
 | [`combat_achievement`](#combat_achievement) | You complete a combat task |
 
 New event types and new fields may be added in later versions. Ignore event types and fields you don't recognise.
@@ -43,7 +45,7 @@ New event types and new fields may be added in later versions. Ignore event type
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `eventType` | string | `"loot"`, `"collection_log"` or `"combat_achievement"`. |
+| `eventType` | string | `"loot"`, `"collection_log"`, `"collection_log_snapshot"` or `"combat_achievement"`. |
 | `timestamp` | string | When the event happened, ISO 8601 in UTC to the second, e.g. `"2026-11-12T20:35:00Z"`. |
 | `rsn` | string | The player's current display name. Changes when the player changes name. |
 | `accountHash` | string | Stable account identifier that survives name changes. Use this, not `rsn`, to identify a player. A string because it is a 64-bit number. |
@@ -280,6 +282,29 @@ A Fractured Archive chest:
   "accountHash": "-3412345678901234567",
   "itemName": "Vorkath's head",
   "itemId": 21907
+}
+```
+
+### `collection_log_snapshot`
+
+Every item in the collection log, so slots obtained before the plugin was installed can be backfilled. Sent when you open the collection log in game, at most once per opening, and only if the log changed since the last snapshot sent in this session. The plugin briefly opens and closes the log's search to list every item (the same approach as the [Valiance clan plugin](https://github.com/Sicryption/ValianceClanPlugin)). Opening the log is enough: you don't need to click through the pages.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `items` | array | Every obtained item, as a list of `{ "itemId": number, "quantity": number }`. `quantity` is the obtained count shown in the collection log. In no particular order. |
+| `obtainedSlots` | number | Unique slots obtained, from the game's own counter. A few items are listed under two item IDs on different pages (e.g. the Prospector outfit), so this can be lower than the length of `items`. |
+
+```json
+{
+  "eventType": "collection_log_snapshot",
+  "timestamp": "2026-11-12T20:35:00Z",
+  "rsn": "ExamplePlayer",
+  "accountHash": "-3412345678901234567",
+  "items": [
+    { "itemId": 4151, "quantity": 3 },
+    { "itemId": 13262, "quantity": 1 }
+  ],
+  "obtainedSlots": 2
 }
 ```
 
