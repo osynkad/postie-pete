@@ -27,6 +27,7 @@ Any `2xx` response counts as success. Failed requests are not retried.
 | **Collection log** › **Send event** | on | Send `collection_log` events. |
 | **Collection log** › **Send full log when opened** | off | Send a `collection_log_snapshot` event each time you open the collection log in game. |
 | **Combat achievements** › **Send event** | on | Send `combat_achievement` events. |
+| **Combat achievements** › **Send all completed tasks** | off | Send a `combat_achievement_snapshot` event after you log in, and again when you open the combat achievements interface. |
 
 ## Events
 
@@ -38,6 +39,7 @@ Every event is a JSON object. All events share the [common fields](#common-field
 | [`collection_log`](#collection_log) | A new item is added to your collection log |
 | [`collection_log_snapshot`](#collection_log_snapshot) | You open the collection log (opt-in, off by default) |
 | [`combat_achievement`](#combat_achievement) | You complete a combat task |
+| [`combat_achievement_snapshot`](#combat_achievement_snapshot) | You log in, or open the combat achievements interface (opt-in, off by default) |
 
 New event types and new fields may be added in later versions. Ignore event types and fields you don't recognise.
 
@@ -45,7 +47,7 @@ New event types and new fields may be added in later versions. Ignore event type
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `eventType` | string | `"loot"`, `"collection_log"`, `"collection_log_snapshot"` or `"combat_achievement"`. |
+| `eventType` | string | `"loot"`, `"collection_log"`, `"collection_log_snapshot"`, `"combat_achievement"` or `"combat_achievement_snapshot"`. |
 | `timestamp` | string | When the event happened, ISO 8601 in UTC to the second, e.g. `"2026-11-12T20:35:00Z"`. |
 | `rsn` | string | The player's current display name. Changes when the player changes name. |
 | `accountHash` | string | Stable account identifier that survives name changes. Use this, not `rsn`, to identify a player. A string because it is a 64-bit number. |
@@ -325,6 +327,39 @@ Every item in the collection log, so slots obtained before the plugin was instal
   "tier": "hard",
   "task": "Why Are You Running?",
   "taskId": 402
+}
+```
+
+### `combat_achievement_snapshot`
+
+Every completed combat task with your points and tier (the example below uses made-up totals and thresholds), so tasks completed before the plugin was installed can be backfilled. Sent a few seconds after you log in and again when you open any combat achievements interface, only if your completed tasks changed since the last snapshot sent in this session. It isn't sent while you have 0 points. Everything is read from values the game sends at login, so no interface is opened or clicked. Task completion is read the same way as the [Valiance clan plugin](https://github.com/Sicryption/ValianceClanPlugin).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `completedTaskIds` | array of numbers | The game's internal ID of every completed task, ascending. |
+| `completedTasks` | number | Number of completed tasks (the length of `completedTaskIds`). |
+| `points` | number | Combat achievement points, from the game's own counter. |
+| `tier` | string \| null | Highest tier whose points threshold you've reached: `"easy"`, `"medium"`, `"hard"`, `"elite"`, `"master"` or `"grandmaster"`. `null` before reaching easy. |
+| `tiers` | array | Progress per tier, easy first, as `{ "tier": string, "completed": number, "total": number, "pointsThreshold": number \| null }`. `pointsThreshold` is the points needed for the tier, `null` if the game didn't report it. |
+
+```json
+{
+  "eventType": "combat_achievement_snapshot",
+  "timestamp": "2026-11-12T20:35:00Z",
+  "rsn": "ExamplePlayer",
+  "accountHash": "-3412345678901234567",
+  "completedTaskIds": [0, 1, 4, 17, 402],
+  "completedTasks": 5,
+  "points": 7,
+  "tier": null,
+  "tiers": [
+    { "tier": "easy", "completed": 4, "total": 33, "pointsThreshold": 33 },
+    { "tier": "medium", "completed": 0, "total": 41, "pointsThreshold": 115 },
+    { "tier": "hard", "completed": 1, "total": 66, "pointsThreshold": 304 },
+    { "tier": "elite", "completed": 0, "total": 140, "pointsThreshold": 820 },
+    { "tier": "master", "completed": 0, "total": 172, "pointsThreshold": 1465 },
+    { "tier": "grandmaster", "completed": 0, "total": 147, "pointsThreshold": 2005 }
+  ]
 }
 ```
 

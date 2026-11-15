@@ -229,6 +229,38 @@ public class PostieEventTest
 		assertEquals(402, json.get("taskId").getAsInt());
 	}
 
+	@Test
+	public void combatAchievementSnapshotEventHasOnlySnapshotFields()
+	{
+		JsonObject json = toJson(new CombatAchievementSnapshotEvent(COMMON, Arrays.asList(3, 17, 402), 9, "easy",
+			Arrays.asList(
+				new CombatAchievementSnapshotEvent.TierProgress("easy", 2, 33, 33),
+				new CombatAchievementSnapshotEvent.TierProgress("medium", 1, 41, null))));
+
+		assertEquals(with(COMMON_FIELDS, "completedTaskIds", "completedTasks", "points", "tier", "tiers"), json.keySet());
+		assertEquals("combat_achievement_snapshot", json.get("eventType").getAsString());
+		assertEquals(3, json.get("completedTasks").getAsInt());
+		assertEquals(402, json.getAsJsonArray("completedTaskIds").get(2).getAsInt());
+		assertEquals(9, json.get("points").getAsInt());
+		assertEquals("easy", json.get("tier").getAsString());
+		JsonObject easy = json.getAsJsonArray("tiers").get(0).getAsJsonObject();
+		assertEquals(set("tier", "completed", "total", "pointsThreshold"), easy.keySet());
+		assertEquals(33, easy.get("pointsThreshold").getAsInt());
+		assertEquals(true, json.getAsJsonArray("tiers").get(1).getAsJsonObject().get("pointsThreshold").isJsonNull());
+	}
+
+	@Test
+	public void combatTierIsTheHighestThresholdReached()
+	{
+		int[] thresholds = {33, 115, 304, 820, 1465, 2005};
+		assertEquals(null, CombatAchievementReader.tierFor(32, thresholds));
+		assertEquals("easy", CombatAchievementReader.tierFor(33, thresholds));
+		assertEquals("elite", CombatAchievementReader.tierFor(1000, thresholds));
+		assertEquals("grandmaster", CombatAchievementReader.tierFor(2630, thresholds));
+		// Unknown (0) thresholds are skipped rather than counted as reached.
+		assertEquals("medium", CombatAchievementReader.tierFor(1000, new int[]{33, 115, 0, 0, 0, 0}));
+	}
+
 	private static JsonObject toJson(PostieEvent event)
 	{
 		return GSON.toJsonTree(event).getAsJsonObject();

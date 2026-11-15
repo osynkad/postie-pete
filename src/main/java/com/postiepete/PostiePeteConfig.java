@@ -30,7 +30,7 @@ public interface PostiePeteConfig extends Config
 
 	@ConfigSection(
 		name = "Combat achievements",
-		description = "Completed combat tasks",
+		description = "Completed combat tasks, points and tier",
 		position = 4,
 		closedByDefault = true
 	)
@@ -107,5 +107,20 @@ public interface PostiePeteConfig extends Config
 	default boolean sendCombatAchievement()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		keyName = "sendCombatAchievementSnapshot",
+		name = "Send all completed tasks",
+		description = "After you log in, send every combat task you have completed with your points and tier, so tasks"
+			+ " completed before installing the plugin are included. Sent again when you open the combat achievements"
+			+ " interface, and only if something changed.",
+		warning = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers",
+		section = combatAchievementSection,
+		position = 1
+	)
+	default boolean sendCombatAchievementSnapshot()
+	{
+		return false;
 	}
 }

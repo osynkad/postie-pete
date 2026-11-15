@@ -220,6 +220,9 @@ public class PostiePetePlugin extends Plugin
 	@Inject
 	private CollectionLogReader collectionLogReader;
 
+	@Inject
+	private CombatAchievementReader combatAchievementReader;
+
 	private Gson gson;
 
 	private LootEvent.KillTime lastKillTime;
@@ -268,6 +271,8 @@ public class PostiePetePlugin extends Plugin
 		gson = baseGson.newBuilder().serializeNulls().create();
 		collectionLogReader.setOnRead(this::onCollectionLogRead);
 		eventBus.register(collectionLogReader);
+		combatAchievementReader.setOnRead(this::onCombatAchievementsRead);
+		eventBus.register(combatAchievementReader);
 		// Turned on while already logged in: no login to wait for
 		lootTrackerChecked = false;
 		clientThread.invokeLater(() ->
@@ -315,6 +320,8 @@ public class PostiePetePlugin extends Plugin
 		lastCollectionLogItemId = 0;
 		eventBus.unregister(collectionLogReader);
 		collectionLogReader.reset();
+		eventBus.unregister(combatAchievementReader);
+		combatAchievementReader.reset();
 		log.debug("Postie Pete stopped!");
 	}
 
@@ -1228,6 +1235,21 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		postEvent(new CollectionLogSnapshotEvent(common(localPlayer), items, obtainedSlots));
+	}
+
+	/**
+	 * Every completed combat task was read after login or opening the combat achievements interface.
+	 */
+	private void onCombatAchievementsRead(List<Integer> completedTaskIds, int points, String tier,
+		List<CombatAchievementSnapshotEvent.TierProgress> tiers)
+	{
+		Player localPlayer = client.getLocalPlayer();
+		if (localPlayer == null || !config.sendCombatAchievementSnapshot())
+		{
+			return;
+		}
+
+		postEvent(new CombatAchievementSnapshotEvent(common(localPlayer), completedTaskIds, points, tier, tiers));
 	}
 
 	/**
