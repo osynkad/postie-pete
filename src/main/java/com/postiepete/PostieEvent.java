@@ -12,9 +12,11 @@ abstract class PostieEvent
 	static final String COLLECTION_LOG = "collection_log";
 	static final String COMBAT_ACHIEVEMENT = "combat_achievement";
 	static final String COLLECTION_LOG_SNAPSHOT = "collection_log_snapshot";
+	static final String COMBAT_ACHIEVEMENT_SNAPSHOT = "combat_achievement_snapshot";
 
 	/**
-	 * "loot", "collection_log", "collection_log_snapshot" or "combat_achievement".
+	 * "loot", "collection_log", "collection_log_snapshot", "combat_achievement" or
+	 * "combat_achievement_snapshot".
 	 */
 	final String eventType;
 	final String timestamp;
