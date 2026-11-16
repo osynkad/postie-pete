@@ -28,8 +28,10 @@ import net.runelite.api.Player;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.VarClientID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.config.ConfigManager;
@@ -81,6 +83,10 @@ public class PostiePetePlugin extends Plugin
 	private static final Pattern DOOM_TOTAL_DURATION_PATTERN = Pattern.compile(
 		"Total duration: (?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)");
 
+	// "Challenge complete: Bork. Duration: <col=ef1020>2:21.00</col>. Total: ...", tags removed (Fractured Archive)
+	private static final Pattern TFA_BOSS_COMPLETE_PATTERN = Pattern.compile(
+		"Challenge complete: (?<boss>.+?)\\. Duration: (?<time>[0-9:]+(?:\\.[0-9]+)?)");
+
 	private static final String COLOSSEUM = "Fortis Colosseum";
 	private static final String DOOM_OF_MOKHAIOTL = "Doom of Mokhaiotl";
 
@@ -107,6 +113,29 @@ public class PostiePetePlugin extends Plugin
 		VarbitID.RUNE_POUCH_QUANTITY_2,
 		VarbitID.RUNE_POUCH_QUANTITY_3,
 		VarbitID.RUNE_POUCH_QUANTITY_4
+	};
+
+	// Fractured Archive party slots: a non-zero status means the slot is taken, and the name is the player in it
+	private static final int[] TFA_PARTY_SLOT_VARBITS = {
+		VarbitID.TFA_CLIENT_P0,
+		VarbitID.TFA_CLIENT_P1,
+		VarbitID.TFA_CLIENT_P2,
+		VarbitID.TFA_CLIENT_P3,
+		VarbitID.TFA_CLIENT_P4,
+		VarbitID.TFA_CLIENT_P5,
+		VarbitID.TFA_CLIENT_P6,
+		VarbitID.TFA_CLIENT_P7
+	};
+
+	private static final int[] TFA_PARTY_NAME_VARCS = {
+		VarClientID.TFA_CLIENT_NAME0,
+		VarClientID.TFA_CLIENT_NAME1,
+		VarClientID.TFA_CLIENT_NAME2,
+		VarClientID.TFA_CLIENT_NAME3,
+		VarClientID.TFA_CLIENT_NAME4,
+		VarClientID.TFA_CLIENT_NAME5,
+		VarClientID.TFA_CLIENT_NAME6,
+		VarClientID.TFA_CLIENT_NAME7
 	};
 
 	@Inject
@@ -137,6 +166,8 @@ public class PostiePetePlugin extends Plugin
 	private Integer lastDoomLevel;
 	private Double doomFullRunDuration;
 
+	private final FracturedArchive fracturedArchive = new FracturedArchive();
+
 	// The collection log overview's "most recent item" varp is set to the item ID of each new
 	// collection log item. On login the game sends the existing value too, so changes are only
 	// treated as new items once the player is fully logged in and a baseline has been taken.
@@ -160,6 +191,7 @@ public class PostiePetePlugin extends Plugin
 		lastColosseumWave = null;
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
+		fracturedArchive.reset();
 		collectionLogReady = false;
 		lastCollectionLogItemId = 0;
 		log.debug("Postie Pete stopped!");
@@ -241,6 +273,7 @@ public class PostiePetePlugin extends Plugin
 		Double completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
 		boolean personalBest = completionTime != null && lastKillTimePersonalBest;
 		Integer stage = null;
+		LootEvent.Raid raid = null;
 
 		// Loot can be claimed after any wave / delve level. Send how far the run got, and a duration
 		// only for a full run. The game only reports per-wave / per-level personal bests, so the API
@@ -260,6 +293,10 @@ public class PostiePetePlugin extends Plugin
 			completionTime = stage != null && stage >= DOOM_FULL_RUN_LEVELS ? doomFullRunDuration : null;
 			personalBest = false;
 		}
+		else if (FracturedArchive.LOOT_SOURCE.equals(event.getName()))
+		{
+			raid = fracturedArchive.consumeRaid(fracturedArchiveTeamSize(), fracturedArchiveTeam());
+		}
 		lastColosseumWave = null;
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
@@ -270,7 +307,20 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		postEvent(new LootEvent(common(localPlayer), event.getName(), null, completionTime, personalBest, stage,
-			null, toDrops(event.getItems())));
+			raid, toDrops(event.getItems())));
+	}
+
+	/**
+	 * Tracks which Fractured Archive path bosses the team fights. Only hitsplats the player can see
+	 * are reported, so this only picks up bosses in the player's own raid.
+	 */
+	@Subscribe
+	public void onHitsplatApplied(HitsplatApplied event)
+	{
+		if (event.getActor() instanceof NPC)
+		{
+			fracturedArchive.onNpcHit(((NPC) event.getActor()).getId());
+		}
 	}
 
 	@Subscribe
@@ -366,6 +416,23 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		String message = Text.removeTags(event.getMessage());
+
+		if (message.equals(FracturedArchive.RUN_START_MESSAGE))
+		{
+			fracturedArchive.onRunStarted();
+			return;
+		}
+
+		// Checked before KILL_DURATION_PATTERN, which also matches these. A boss's duration
+		// isn't a kill time: the raid's loot gets the total completion time.
+		matcher = TFA_BOSS_COMPLETE_PATTERN.matcher(message);
+		if (matcher.lookingAt())
+		{
+			fracturedArchive.onBossCompleted(matcher.group("boss"), parseDuration(matcher.group("time")));
+			return;
+		}
+
 		matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
 		if (matcher.find())
 		{
@@ -381,7 +448,12 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		String message = Text.removeTags(event.getMessage());
+		// Read the team now, while the raid's party is certain to be loaded; the chest is opened later
+		if (message.startsWith(FracturedArchive.COMPLETION_MESSAGE))
+		{
+			fracturedArchive.onRaidCompleted(fracturedArchiveTeamSize(), fracturedArchiveTeam());
+			return;
+		}
 
 		matcher = COMBAT_ACHIEVEMENT_PATTERN.matcher(message);
 		if (matcher.matches() && config.sendCombatAchievement())
@@ -495,6 +567,45 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		return new PlayerItems(equipment, inventory, getRunePouch(), getQuiver());
+	}
+
+	/**
+	 * Number of occupied Fractured Archive party slots, or null if not in a party.
+	 */
+	private Integer fracturedArchiveTeamSize()
+	{
+		int size = 0;
+		for (int varbit : TFA_PARTY_SLOT_VARBITS)
+		{
+			if (client.getVarbitValue(varbit) != 0)
+			{
+				size++;
+			}
+		}
+		return size > 0 ? size : null;
+	}
+
+	/**
+	 * Names in the occupied Fractured Archive party slots, in slot order, or null if not in a party.
+	 */
+	private List<String> fracturedArchiveTeam()
+	{
+		List<String> team = new ArrayList<>();
+		for (int i = 0; i < TFA_PARTY_SLOT_VARBITS.length; i++)
+		{
+			if (client.getVarbitValue(TFA_PARTY_SLOT_VARBITS[i]) == 0)
+			{
+				continue;
+			}
+
+			String name = client.getVarcStrValue(TFA_PARTY_NAME_VARCS[i]);
+			if (name != null && !name.isEmpty())
+			{
+				team.add(Text.sanitize(Text.removeTags(name)));
+			}
+		}
+		log.debug("Fractured Archive team: {}", team);
+		return team.isEmpty() ? null : team;
 	}
 
 	/**
