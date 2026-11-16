@@ -78,6 +78,26 @@ class LootEvent extends PlayerItemsEvent
 		 * Empty if none were seen (e.g. the plugin was enabled mid-raid).
 		 */
 		List<Split> splits;
+
+		/**
+		 * Every purple (unique) announced in the raid with "found something special", the player's
+		 * own included, in the order announced. Empty when nobody got one.
+		 */
+		List<Purple> purples;
+	}
+
+	@Value
+	static class Purple
+	{
+		/**
+		 * Display name of the player who got it, as the game announced it.
+		 */
+		String rsn;
+
+		/**
+		 * The item's name as announced, e.g. "Obligator (uncharged)".
+		 */
+		String item;
 	}
 
 	@Value

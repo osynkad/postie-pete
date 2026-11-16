@@ -400,6 +400,17 @@ public class PostiePetePlugin extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
+		// Purples might be announced as a notification rather than a game message; both come from the game
+		if (event.getType() == ChatMessageType.GAMEMESSAGE || event.getType() == ChatMessageType.FRIENDSCHATNOTIFICATION)
+		{
+			Player player = client.getLocalPlayer();
+			String localName = player == null || player.getName() == null ? null : Text.sanitize(player.getName());
+			if (fracturedArchive.onMessage(Text.removeTags(event.getMessage()), localName))
+			{
+				return;
+			}
+		}
+
 		if (event.getType() != ChatMessageType.GAMEMESSAGE && event.getType() != ChatMessageType.SPAM)
 		{
 			return;

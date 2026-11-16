@@ -51,12 +51,13 @@ public class PostieEventTest
 	{
 		LootEvent.Raid raid = new LootEvent.Raid(2, Arrays.asList("ExamplePlayer", "Teammate"),
 			Arrays.asList("Ezekiel", null, "Xarth"),
-			Arrays.asList(new LootEvent.Split("Archive Guardian", 123.0), new LootEvent.Split("Ezekiel", 141.6)));
+			Arrays.asList(new LootEvent.Split("Archive Guardian", 123.0), new LootEvent.Split("Ezekiel", 141.6)),
+			Collections.singletonList(new LootEvent.Purple("Teammate", "Obligator (uncharged)")));
 		JsonObject json = toJson(new LootEvent(COMMON, "Fractured Archive", null, 1534.2, false, null, raid,
 			Collections.emptyList()));
 
 		JsonObject raidJson = json.getAsJsonObject("raid");
-		assertEquals(set("teamSize", "team", "path", "splits"), raidJson.keySet());
+		assertEquals(set("teamSize", "team", "path", "splits", "purples"), raidJson.keySet());
 		assertEquals(2, raidJson.get("teamSize").getAsInt());
 		assertEquals("Teammate", raidJson.getAsJsonArray("team").get(1).getAsString());
 		assertEquals(3, raidJson.getAsJsonArray("path").size());
@@ -66,6 +67,9 @@ public class PostieEventTest
 		assertEquals(set("boss", "duration"), split.keySet());
 		assertEquals("Ezekiel", split.get("boss").getAsString());
 		assertEquals(141.6, split.get("duration").getAsDouble(), 0);
+		JsonObject purple = raidJson.getAsJsonArray("purples").get(0).getAsJsonObject();
+		assertEquals(set("rsn", "item"), purple.keySet());
+		assertEquals("Obligator (uncharged)", purple.get("item").getAsString());
 	}
 
 	@Test
