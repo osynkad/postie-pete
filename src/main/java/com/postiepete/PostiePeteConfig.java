@@ -11,7 +11,7 @@ public interface PostiePeteConfig extends Config
 	@ConfigSection(
 		name = "Loot",
 		description = "NPC drops, raid and reward chests, clue caskets etc.",
-		position = 1,
+		position = 2,
 		closedByDefault = true
 	)
 	String lootSection = "loot";
@@ -19,7 +19,7 @@ public interface PostiePeteConfig extends Config
 	@ConfigSection(
 		name = "Collection log",
 		description = "New items added to your collection log",
-		position = 2,
+		position = 3,
 		closedByDefault = true
 	)
 	String collectionLogSection = "collectionLog";
@@ -27,21 +27,32 @@ public interface PostiePeteConfig extends Config
 	@ConfigSection(
 		name = "Combat achievements",
 		description = "Completed combat tasks",
-		position = 3,
+		position = 4,
 		closedByDefault = true
 	)
 	String combatAchievementSection = "combatAchievement";
 
 	@ConfigItem(
-		keyName = "apiUrl",
-		name = "API URL",
-		description = "URL to the API that should receive the events",
+		keyName = "endpointUrl",
+		name = "Endpoint URL",
+		description = "Full URL that events are POSTed to, e.g. http://localhost:3000/events",
 		warning = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers",
 		position = 0
 	)
-	default String apiUrl()
+	default String endpointUrl()
 	{
 		return "";
+	}
+
+	@ConfigItem(
+		keyName = "includePlayerItems",
+		name = "Include player items",
+		description = "Send equipment, inventory, rune pouch and quiver contents with every event",
+		position = 1
+	)
+	default boolean includePlayerItems()
+	{
+		return true;
 	}
 
 	@ConfigItem(

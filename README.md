@@ -6,12 +6,12 @@ Postie Pete only gathers events. It does not store, display or analyse anything.
 
 ## Setup
 
-Set **API URL** in the plugin settings to the base URL of your API, for example `http://localhost:3000`. While it is empty, nothing is sent.
+Set **Endpoint URL** in the plugin settings to the full URL that events should be POSTed to, for example `http://localhost:3000/events`. While it is empty, nothing is sent.
 
 Every event is sent as:
 
 ```http
-POST {API URL}/events
+POST {Endpoint URL}
 Content-Type: application/json
 ```
 
@@ -21,7 +21,8 @@ Any `2xx` response counts as success. Failed requests are not retried.
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| **API URL** | empty | Base URL of the API that receives events. Nothing is sent while it is empty. |
+| **Endpoint URL** | empty | Full URL that events are POSTed to. Nothing is sent while it is empty. |
+| **Include player items** | on | Send the player's equipment, inventory, rune pouch and quiver with every event. When off, `playerItems` is `null`. |
 | **Loot** › **Send event** | on | Send `loot` events. |
 | **Collection log** › **Send event** | on | Send `collection_log` events. |
 | **Combat achievements** › **Send event** | on | Send `combat_achievement` events. |
@@ -46,7 +47,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | `timestamp` | string | When the event happened, ISO 8601 in UTC to the second, e.g. `"2026-11-12T20:35:00Z"`. |
 | `rsn` | string | The player's current display name. Changes when the player changes name. |
 | `accountHash` | string | Stable account identifier that survives name changes. Use this, not `rsn`, to identify a player. A string because it is a 64-bit number. |
-| `playerItems` | object | The player's items at the time of the event. See [Player items](#player-items). |
+| `playerItems` | object \| null | The player's items at the time of the event. See [Player items](#player-items). `null` when **Include player items** is off. |
 
 ### `loot`
 

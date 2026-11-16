@@ -222,7 +222,7 @@ public class PostiePetePlugin extends Plugin
 			Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(),
 			localPlayer.getName(),
 			accountHash(),
-			getPlayerItems());
+			config.includePlayerItems() ? getPlayerItems() : null);
 	}
 
 	/**
@@ -346,22 +346,18 @@ public class PostiePetePlugin extends Plugin
 
 	private void postEvent(PostieEvent event)
 	{
-		String apiUrl = config.apiUrl();
-		if (apiUrl == null || apiUrl.trim().isEmpty())
+		String endpointUrl = config.endpointUrl();
+		if (endpointUrl == null || endpointUrl.trim().isEmpty())
 		{
 			return;
 		}
 
-		HttpUrl baseUrl = HttpUrl.parse(apiUrl.trim());
-		if (baseUrl == null)
+		HttpUrl url = HttpUrl.parse(endpointUrl.trim());
+		if (url == null)
 		{
-			log.debug("Invalid API URL: {}", apiUrl);
+			log.debug("Invalid endpoint URL: {}", endpointUrl);
 			return;
 		}
-
-		HttpUrl url = baseUrl.newBuilder()
-			.addPathSegment("events")
-			.build();
 
 		Request request = new Request.Builder()
 			.url(url)

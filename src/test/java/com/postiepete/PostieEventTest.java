@@ -53,6 +53,17 @@ public class PostieEventTest
 		assertEquals("hard", json.get("tier").getAsString());
 	}
 
+	@Test
+	public void excludedPlayerItemsAreSentAsNull()
+	{
+		PostieEvent.Common common = new PostieEvent.Common(
+			"2026-11-12T20:35:00Z", "ExamplePlayer", "-3412345678901234567", null);
+		JsonObject json = toJson(new CombatAchievementEvent(common, "hard", "Noxious Foe"));
+
+		assertEquals(with(COMMON_FIELDS, "tier", "task"), json.keySet());
+		assertEquals(true, json.get("playerItems").isJsonNull());
+	}
+
 	private static JsonObject toJson(PostieEvent event)
 	{
 		return GSON.toJsonTree(event).getAsJsonObject();
