@@ -20,17 +20,22 @@ import net.runelite.api.Client;
 import net.runelite.api.EnumComposition;
 import net.runelite.api.EnumID;
 import net.runelite.api.EquipmentInventorySlot;
+import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
+import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.NpcLootReceived;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -62,13 +67,26 @@ public class PostiePetePlugin extends Plugin
 			+ "|The Fractured Archive: Total completion time:) "
 			+ "(?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)</col>(?<newpb> \\(new personal best\\))?");
 
-	// "New item added to your collection log: Abyssal whip" (requires the in-game collection log chat notification)
-	private static final Pattern COLLECTION_LOG_PATTERN = Pattern.compile(
-		"New item added to your collection log: (?<item>.+)");
-
 	// "Congratulations, you've completed a hard combat task: Task Name (3 points)."
 	private static final Pattern COMBAT_ACHIEVEMENT_PATTERN = Pattern.compile(
 		"Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+?)(?: \\(\\d+ points?\\))?\\.?");
+
+	// "Wave 2 completed! Wave duration: @mes_hl_red@1:09.60</col>"
+	private static final Pattern COLOSSEUM_WAVE_PATTERN = Pattern.compile("Wave (?<wave>\\d+) completed!");
+
+	// "Delve level: 2 duration: @mes_hl_red@1:19.80</col>. Personal best: ..." (Doom of Mokhaiotl)
+	private static final Pattern DOOM_LEVEL_PATTERN = Pattern.compile("Delve level: (?<level>\\d+)\\+? duration:");
+
+	// "Total duration: @mes_hl_red@2:03.00</col>", sent right after the delve level duration
+	private static final Pattern DOOM_TOTAL_DURATION_PATTERN = Pattern.compile(
+		"Total duration: (?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)");
+
+	private static final String COLOSSEUM = "Fortis Colosseum";
+	private static final String DOOM_OF_MOKHAIOTL = "Doom of Mokhaiotl";
+
+	// A full run, the only kind that gets a duration. Doom can continue past level 8, but only levels 1-8 are timed.
+	private static final int COLOSSEUM_FULL_RUN_WAVES = 12;
+	private static final int DOOM_FULL_RUN_LEVELS = 8;
 
 	// The duration message arrives on the kill, the loot spawns after the death animation
 	private static final int KILL_TIME_MAX_AGE_TICKS = 30;
@@ -103,15 +121,33 @@ public class PostiePetePlugin extends Plugin
 	@Inject
 	private Gson baseGson;
 
+	@Inject
+	private ItemManager itemManager;
+
+	@Inject
+	private ConfigManager configManager;
+
 	private Gson gson;
 
 	private Double lastKillTime;
 	private boolean lastKillTimePersonalBest;
 	private int lastKillTimeTick;
 
+	private Integer lastColosseumWave;
+	private Integer lastDoomLevel;
+	private Double doomFullRunDuration;
+
+	// The collection log overview's "most recent item" varp is set to the item ID of each new
+	// collection log item. On login the game sends the existing value too, so changes are only
+	// treated as new items once the player is fully logged in and a baseline has been taken.
+	private boolean collectionLogReady;
+	private int lastCollectionLogItemId;
+
 	@Override
 	protected void startUp() throws Exception
 	{
+		migrateApiUrl();
+
 		// serializeNulls so that optional fields (e.g. a loot event's duration) are always present, as null
 		gson = baseGson.newBuilder().serializeNulls().create();
 		log.debug("Postie Pete started!");
@@ -121,7 +157,49 @@ public class PostiePetePlugin extends Plugin
 	protected void shutDown() throws Exception
 	{
 		lastKillTime = null;
+		lastColosseumWave = null;
+		lastDoomLevel = null;
+		doomFullRunDuration = null;
+		collectionLogReady = false;
+		lastCollectionLogItemId = 0;
 		log.debug("Postie Pete stopped!");
+	}
+
+	/**
+	 * Older versions had a base "API URL" setting and always posted to {base}/events. Converts
+	 * that to the full endpoint URL setting, once, so existing users keep posting to the same URL.
+	 */
+	private void migrateApiUrl()
+	{
+		String legacyUrl = configManager.getConfiguration(PostiePeteConfig.GROUP, PostiePeteConfig.LEGACY_API_URL_KEY);
+		if (legacyUrl == null)
+		{
+			return;
+		}
+
+		if (!legacyUrl.trim().isEmpty()
+			&& configManager.getConfiguration(PostiePeteConfig.GROUP, PostiePeteConfig.ENDPOINT_URL_KEY) == null)
+		{
+			String endpointUrl = toEndpointUrl(legacyUrl);
+			configManager.setConfiguration(PostiePeteConfig.GROUP, PostiePeteConfig.ENDPOINT_URL_KEY, endpointUrl);
+			log.debug("Migrated API URL {} to endpoint URL {}", legacyUrl, endpointUrl);
+		}
+		configManager.unsetConfiguration(PostiePeteConfig.GROUP, PostiePeteConfig.LEGACY_API_URL_KEY);
+	}
+
+	/**
+	 * The endpoint URL older versions posted to for a given base URL: the base with an "events" path
+	 * segment appended. A value that isn't a valid URL is returned trimmed but otherwise unchanged.
+	 */
+	static String toEndpointUrl(String baseUrl)
+	{
+		String trimmed = baseUrl.trim();
+		HttpUrl parsed = HttpUrl.parse(trimmed);
+		if (parsed == null)
+		{
+			return trimmed;
+		}
+		return parsed.newBuilder().addPathSegment("events").build().toString();
 	}
 
 	@Subscribe
@@ -141,8 +219,8 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), npc.getName(), killTime,
-			killTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
+		postEvent(new LootEvent(common(localPlayer), npc.getName(), npc.getId(), killTime,
+			killTime != null && lastKillTimePersonalBest, null, toDrops(event.getItems())));
 	}
 
 	/**
@@ -161,13 +239,94 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		Double completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
+		boolean personalBest = completionTime != null && lastKillTimePersonalBest;
+		Integer stage = null;
+
+		// Loot can be claimed after any wave / delve level. Send how far the run got, and a duration
+		// only for a full run. The game only reports per-wave / per-level personal bests, so the API
+		// derives run personal bests from the durations.
+		if (COLOSSEUM.equals(event.getName()))
+		{
+			stage = lastColosseumWave;
+			completionTime = stage != null && stage >= COLOSSEUM_FULL_RUN_WAVES
+				? ticksToSeconds(client.getVarpValue(VarPlayerID.COLOSSEUM_TOTAL_DURATION))
+				: null;
+			personalBest = false;
+		}
+		else if (DOOM_OF_MOKHAIOTL.equals(event.getName()))
+		{
+			// The Loot Tracker passes the delve level as metadata
+			stage = event.getMetadata() instanceof Integer ? (Integer) event.getMetadata() : null;
+			completionTime = stage != null && stage >= DOOM_FULL_RUN_LEVELS ? doomFullRunDuration : null;
+			personalBest = false;
+		}
+		lastColosseumWave = null;
+		lastDoomLevel = null;
+		doomFullRunDuration = null;
+
 		if (!config.sendLoot())
 		{
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), event.getName(), completionTime,
-			completionTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
+		postEvent(new LootEvent(common(localPlayer), event.getName(), null, completionTime, personalBest, stage,
+			toDrops(event.getItems())));
+	}
+
+	@Subscribe
+	public void onGameStateChanged(GameStateChanged event)
+	{
+		// LOGGED_IN also follows every loading screen, so only a real logout or hop resets this
+		GameState state = event.getGameState();
+		if (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING || state == GameState.CONNECTION_LOST)
+		{
+			collectionLogReady = false;
+		}
+	}
+
+	/**
+	 * Takes the collection log baseline on the first tick after logging in (or after the plugin is
+	 * enabled mid-session), by which point the game has sent the existing value.
+	 */
+	@Subscribe
+	public void onGameTick(GameTick event)
+	{
+		if (!collectionLogReady && client.getGameState() == GameState.LOGGED_IN)
+		{
+			lastCollectionLogItemId = client.getVarpValue(VarPlayerID.COLLECTION_OVERVIEW_LAST_ITEM0);
+			collectionLogReady = true;
+			log.debug("Collection log baseline: {}", lastCollectionLogItemId);
+		}
+	}
+
+	@Subscribe
+	public void onVarbitChanged(VarbitChanged event)
+	{
+		if (event.getVarpId() != VarPlayerID.COLLECTION_OVERVIEW_LAST_ITEM0 || event.getVarbitId() != -1)
+		{
+			return;
+		}
+
+		int itemId = event.getValue();
+		if (!collectionLogReady)
+		{
+			log.debug("Ignoring collection log varp change to {} during login", itemId);
+			return;
+		}
+		if (itemId <= 0 || itemId == lastCollectionLogItemId)
+		{
+			return;
+		}
+		lastCollectionLogItemId = itemId;
+
+		Player localPlayer = client.getLocalPlayer();
+		if (localPlayer == null || !config.sendCollectionLog())
+		{
+			return;
+		}
+
+		String itemName = itemManager.getItemComposition(itemId).getName();
+		postEvent(new CollectionLogEvent(common(localPlayer), itemName, itemId));
 	}
 
 	@Subscribe
@@ -178,7 +337,36 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		Matcher matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
+		Matcher matcher = COLOSSEUM_WAVE_PATTERN.matcher(event.getMessage());
+		if (matcher.lookingAt())
+		{
+			lastColosseumWave = Integer.parseInt(matcher.group("wave"));
+			return;
+		}
+
+		matcher = DOOM_LEVEL_PATTERN.matcher(event.getMessage());
+		if (matcher.lookingAt())
+		{
+			lastDoomLevel = Integer.parseInt(matcher.group("level"));
+			if (lastDoomLevel == 1)
+			{
+				doomFullRunDuration = null;
+			}
+			return;
+		}
+
+		// Keep the run time at the end of level 8; time spent on deeper levels doesn't count
+		matcher = DOOM_TOTAL_DURATION_PATTERN.matcher(event.getMessage());
+		if (matcher.lookingAt())
+		{
+			if (lastDoomLevel != null && lastDoomLevel >= DOOM_FULL_RUN_LEVELS && doomFullRunDuration == null)
+			{
+				doomFullRunDuration = parseDuration(matcher.group("time"));
+			}
+			return;
+		}
+
+		matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
 		if (matcher.find())
 		{
 			lastKillTime = parseDuration(matcher.group("time"));
@@ -194,16 +382,6 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		String message = Text.removeTags(event.getMessage());
-
-		matcher = COLLECTION_LOG_PATTERN.matcher(message);
-		if (matcher.matches())
-		{
-			if (config.sendCollectionLog())
-			{
-				postEvent(new CollectionLogEvent(common(localPlayer), matcher.group("item")));
-			}
-			return;
-		}
 
 		matcher = COMBAT_ACHIEVEMENT_PATTERN.matcher(message);
 		if (matcher.matches() && config.sendCombatAchievement())
@@ -254,10 +432,26 @@ public class PostiePetePlugin extends Plugin
 		return seconds + Double.parseDouble(parts[parts.length - 1]);
 	}
 
-	private static List<LootEvent.Drop> toDrops(Collection<ItemStack> items)
+	/**
+	 * Converts a game tick count (0.6s each) to seconds, or null if no ticks were counted.
+	 */
+	private static Double ticksToSeconds(int ticks)
+	{
+		return ticks > 0 ? ticks * 6 / 10.0 : null;
+	}
+
+	/**
+	 * Always uses the wiki real-time price, regardless of the player's "Use wiki item prices"
+	 * setting, so values are comparable between players.
+	 */
+	private List<LootEvent.Drop> toDrops(Collection<ItemStack> items)
 	{
 		return items.stream()
-			.map(item -> new LootEvent.Drop(item.getId(), item.getQuantity()))
+			.map(item -> new LootEvent.Drop(
+				item.getId(),
+				itemManager.getItemComposition(item.getId()).getName(),
+				item.getQuantity(),
+				itemManager.getItemPriceWithSource(item.getId(), true)))
 			.collect(Collectors.toList());
 	}
 

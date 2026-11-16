@@ -23,24 +23,39 @@ public class PostieEventTest
 	@Test
 	public void lootEventHasOnlyLootFields()
 	{
-		JsonObject json = toJson(new LootEvent(COMMON, "Vorkath", null, false,
-			Collections.singletonList(new LootEvent.Drop(536, 2))));
+		JsonObject json = toJson(new LootEvent(COMMON, "Vorkath", 8061, null, false, null,
+			Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450))));
 
-		assertEquals(with(COMMON_FIELDS, "source", "duration", "personalBest", "drops"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "source", "npcId", "duration", "personalBest", "stage", "drops"),
+			json.keySet());
 		assertEquals("loot", json.get("eventType").getAsString());
 		assertEquals("ExamplePlayer", json.get("rsn").getAsString());
+		assertEquals(8061, json.get("npcId").getAsInt());
 		assertEquals(true, json.get("duration").isJsonNull());
-		assertEquals(536, json.getAsJsonArray("drops").get(0).getAsJsonObject().get("itemId").getAsInt());
+		assertEquals(true, json.get("stage").isJsonNull());
+		JsonObject drop = json.getAsJsonArray("drops").get(0).getAsJsonObject();
+		assertEquals(set("itemId", "itemName", "quantity", "value"), drop.keySet());
+		assertEquals(536, drop.get("itemId").getAsInt());
+		assertEquals("Dragon bones", drop.get("itemName").getAsString());
+		assertEquals(2450, drop.get("value").getAsLong());
 	}
 
 	@Test
 	public void collectionLogEventHasOnlyCollectionLogFields()
 	{
-		JsonObject json = toJson(new CollectionLogEvent(COMMON, "Vorkath's head"));
+		JsonObject json = toJson(new CollectionLogEvent(COMMON, "Vorkath's head", 21907));
 
-		assertEquals(with(COMMON_FIELDS, "itemName"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "itemName", "itemId"), json.keySet());
 		assertEquals("collection_log", json.get("eventType").getAsString());
 		assertEquals("Vorkath's head", json.get("itemName").getAsString());
+		assertEquals(21907, json.get("itemId").getAsInt());
+	}
+
+	@Test
+	public void nonNpcLootSendsNullNpcId()
+	{
+		JsonObject loot = toJson(new LootEvent(COMMON, "Barrows", null, null, false, null, Collections.emptyList()));
+		assertEquals(true, loot.get("npcId").isJsonNull());
 	}
 
 	@Test

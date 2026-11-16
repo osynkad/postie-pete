@@ -5,9 +5,18 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 
-@ConfigGroup("postiepete")
+@ConfigGroup(PostiePeteConfig.GROUP)
 public interface PostiePeteConfig extends Config
 {
+	String GROUP = "postiepete";
+
+	/**
+	 * Legacy key: the base URL that "/events" was appended to. Migrated to {@link #endpointUrl()} on startup.
+	 */
+	String LEGACY_API_URL_KEY = "apiUrl";
+
+	String ENDPOINT_URL_KEY = "endpointUrl";
+
 	@ConfigSection(
 		name = "Loot",
 		description = "NPC drops, raid and reward chests, clue caskets etc.",
@@ -33,7 +42,7 @@ public interface PostiePeteConfig extends Config
 	String combatAchievementSection = "combatAchievement";
 
 	@ConfigItem(
-		keyName = "endpointUrl",
+		keyName = ENDPOINT_URL_KEY,
 		name = "Endpoint URL",
 		description = "Full URL that events are POSTed to, e.g. http://localhost:3000/events",
 		warning = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers",
