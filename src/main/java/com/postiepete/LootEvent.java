@@ -30,10 +30,15 @@ class LootEvent extends PostieEvent
 	 * early: the Fortis Colosseum wave (1-12) or the Doom of Mokhaiotl delve level. Null otherwise.
 	 */
 	final Integer stage;
+
+	/**
+	 * Team and path details for raid reward chests (currently the Fractured Archive). Null otherwise.
+	 */
+	final Raid raid;
 	final List<Drop> drops;
 
 	LootEvent(Common common, String source, Integer npcId, Double duration, boolean personalBest, Integer stage,
-		List<Drop> drops)
+		Raid raid, List<Drop> drops)
 	{
 		super(LOOT, common);
 		this.source = source;
@@ -41,7 +46,53 @@ class LootEvent extends PostieEvent
 		this.duration = duration;
 		this.personalBest = personalBest;
 		this.stage = stage;
+		this.raid = raid;
 		this.drops = drops;
+	}
+
+	@Value
+	static class Raid
+	{
+		/**
+		 * The raid's scale: the number of players in the raid when it was completed (1 = solo,
+		 * 2 = duo etc.), including the player. Null if the game didn't report the party.
+		 */
+		Integer teamSize;
+
+		/**
+		 * Names of everyone in the raid, including the player, in party slot order. Null if the
+		 * game didn't report the party.
+		 */
+		List<String> team;
+
+		/**
+		 * Fractured Archive: the boss the team picked at each of the three path choices, in order:
+		 * the 2nd boss ("Ezekiel" or "Bork and the Smorks"), the 3rd ("Moia" or "Dreadnoth the Jellied")
+		 * and the 4th ("The Dagon'hai" or "Xarth"). Always 3 entries, an entry is null if the boss
+		 * wasn't seen being fought (e.g. the plugin was enabled mid-raid).
+		 */
+		List<String> path;
+
+		/**
+		 * Each boss's duration, in the order fought, e.g. Archive Guardian, Bork, Moia, Xarth, Ocellus.
+		 * Empty if none were seen (e.g. the plugin was enabled mid-raid).
+		 */
+		List<Split> splits;
+	}
+
+	@Value
+	static class Split
+	{
+		/**
+		 * Boss name as the game writes it in its completion message, e.g. "Bork". Can differ from the
+		 * path's names, which are the OSRS Wiki's (e.g. "Bork and the Smorks").
+		 */
+		String boss;
+
+		/**
+		 * The boss's duration in seconds, e.g. 141.0.
+		 */
+		double duration;
 	}
 
 	@Value

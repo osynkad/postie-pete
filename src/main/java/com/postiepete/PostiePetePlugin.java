@@ -220,7 +220,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		postEvent(new LootEvent(common(localPlayer), npc.getName(), npc.getId(), killTime,
-			killTime != null && lastKillTimePersonalBest, null, toDrops(event.getItems())));
+			killTime != null && lastKillTimePersonalBest, null, null, toDrops(event.getItems())));
 	}
 
 	/**
@@ -270,7 +270,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		postEvent(new LootEvent(common(localPlayer), event.getName(), null, completionTime, personalBest, stage,
-			toDrops(event.getItems())));
+			null, toDrops(event.getItems())));
 	}
 
 	@Subscribe
