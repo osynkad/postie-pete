@@ -31,6 +31,7 @@ import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.NpcLootReceived;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -103,6 +104,9 @@ public class PostiePetePlugin extends Plugin
 	@Inject
 	private Gson baseGson;
 
+	@Inject
+	private ItemManager itemManager;
+
 	private Gson gson;
 
 	private Double lastKillTime;
@@ -141,7 +145,7 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), npc.getName(), killTime,
+		postEvent(new LootEvent(common(localPlayer), npc.getName(), npc.getId(), killTime,
 			killTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
 	}
 
@@ -166,7 +170,7 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), event.getName(), completionTime,
+		postEvent(new LootEvent(common(localPlayer), event.getName(), null, completionTime,
 			completionTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
 	}
 
@@ -254,10 +258,13 @@ public class PostiePetePlugin extends Plugin
 		return seconds + Double.parseDouble(parts[parts.length - 1]);
 	}
 
-	private static List<LootEvent.Drop> toDrops(Collection<ItemStack> items)
+	private List<LootEvent.Drop> toDrops(Collection<ItemStack> items)
 	{
 		return items.stream()
-			.map(item -> new LootEvent.Drop(item.getId(), item.getQuantity()))
+			.map(item -> new LootEvent.Drop(
+				item.getId(),
+				itemManager.getItemComposition(item.getId()).getName(),
+				item.getQuantity()))
 			.collect(Collectors.toList());
 	}
 

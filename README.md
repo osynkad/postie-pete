@@ -54,9 +54,10 @@ New event types and new fields may be added in later versions. Ignore event type
 | Field | Type | Description |
 | --- | --- | --- |
 | `source` | string | Where the loot came from: the NPC name for drops (e.g. `"Vorkath"`), or RuneLite's Loot Tracker name for other loot (e.g. `"Fractured Archive"`, `"Barrows"`, `"Clue Scroll (Hard)"`). |
+| `npcId` | number \| null | The NPC's ID for drops, e.g. `8061` for Vorkath. Some NPCs have several IDs (different forms or locations), so group by `source` if you want them together. `null` for non-NPC loot. |
 | `duration` | number \| null | Kill or completion time in seconds, e.g. `83.4`, as reported by the game. `null` when the game doesn't report one, which is the case for most non-boss NPCs. |
 | `personalBest` | boolean | `true` when the game reported a new personal best for `duration`, otherwise `false`. |
-| `drops` | array | The loot received, as a list of `{ "itemId": number, "quantity": number }`. |
+| `drops` | array | The loot received, as a list of `{ "itemId": number, "itemName": string, "quantity": number }`. `itemName` comes from the game's item data and isn't unique, so use `itemId` as the key. |
 
 ```json
 {
@@ -66,11 +67,12 @@ New event types and new fields may be added in later versions. Ignore event type
   "accountHash": "-3412345678901234567",
   "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
   "source": "Vorkath",
+  "npcId": 8061,
   "duration": 83.4,
   "personalBest": false,
   "drops": [
-    { "itemId": 536, "quantity": 2 },
-    { "itemId": 995, "quantity": 15000 }
+    { "itemId": 536, "itemName": "Dragon bones", "quantity": 2 },
+    { "itemId": 995, "itemName": "Coins", "quantity": 15000 }
   ]
 }
 ```

@@ -23,14 +23,25 @@ public class PostieEventTest
 	@Test
 	public void lootEventHasOnlyLootFields()
 	{
-		JsonObject json = toJson(new LootEvent(COMMON, "Vorkath", null, false,
-			Collections.singletonList(new LootEvent.Drop(536, 2))));
+		JsonObject json = toJson(new LootEvent(COMMON, "Vorkath", 8061, null, false,
+			Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2))));
 
-		assertEquals(with(COMMON_FIELDS, "source", "duration", "personalBest", "drops"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "source", "npcId", "duration", "personalBest", "drops"), json.keySet());
 		assertEquals("loot", json.get("eventType").getAsString());
 		assertEquals("ExamplePlayer", json.get("rsn").getAsString());
+		assertEquals(8061, json.get("npcId").getAsInt());
 		assertEquals(true, json.get("duration").isJsonNull());
-		assertEquals(536, json.getAsJsonArray("drops").get(0).getAsJsonObject().get("itemId").getAsInt());
+		JsonObject drop = json.getAsJsonArray("drops").get(0).getAsJsonObject();
+		assertEquals(set("itemId", "itemName", "quantity"), drop.keySet());
+		assertEquals(536, drop.get("itemId").getAsInt());
+		assertEquals("Dragon bones", drop.get("itemName").getAsString());
+	}
+
+	@Test
+	public void nonNpcLootSendsNullNpcId()
+	{
+		JsonObject loot = toJson(new LootEvent(COMMON, "Barrows", null, null, false, Collections.emptyList()));
+		assertEquals(true, loot.get("npcId").isJsonNull());
 	}
 
 	@Test
