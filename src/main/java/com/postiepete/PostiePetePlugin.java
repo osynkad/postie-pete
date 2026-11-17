@@ -37,7 +37,6 @@ import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
@@ -70,9 +69,12 @@ public class PostiePetePlugin extends Plugin
 			+ "|The Fractured Archive: Total completion time:) "
 			+ "(?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)</col>(?<newpb> \\(new personal best\\))?");
 
-	// "Congratulations, you've completed a hard combat task: Task Name (3 points)."
-	private static final Pattern COMBAT_ACHIEVEMENT_PATTERN = Pattern.compile(
-		"Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+?)(?: \\(\\d+ points?\\))?\\.?");
+	// "CA_ID:648|Congratulations, you've completed a hard combat task: @ach_comp@Task Name (3 points).", tags removed.
+	// The game puts the task id in front of the message and colours the task name with an @...@ code, which
+	// Text.removeTags leaves in. Older messages came without either.
+	static final Pattern COMBAT_ACHIEVEMENT_PATTERN = Pattern.compile(
+		"(?:CA_ID:\\d+\\|)?Congratulations, you've completed an? (?<tier>\\w+) combat task: (?:@\\w+@)?(?<task>.+?)"
+			+ "(?: \\(\\d+ points?\\))?\\.?");
 
 	// "Wave 2 completed! Wave duration: @mes_hl_red@1:09.60</col>"
 	private static final Pattern COLOSSEUM_WAVE_PATTERN = Pattern.compile("Wave (?<wave>\\d+) completed!");
@@ -95,7 +97,7 @@ public class PostiePetePlugin extends Plugin
 	private static final int COLOSSEUM_FULL_RUN_WAVES = 12;
 	private static final int DOOM_FULL_RUN_LEVELS = 8;
 
-	// The duration message arrives on the kill, the loot spawns after the death animation
+	// The duration message arrives on the kill, the game reports the loot around the same time
 	private static final int KILL_TIME_MAX_AGE_TICKS = 30;
 
 	// Reward chests are opened some time after the completion message, ~10 minutes
@@ -252,38 +254,31 @@ public class PostiePetePlugin extends Plugin
 		return parsed.newBuilder().addPathSegment("events").build().toString();
 	}
 
-	@Subscribe
-	public void onNpcLootReceived(NpcLootReceived event)
-	{
-		Player localPlayer = client.getLocalPlayer();
-		NPC npc = event.getNpc();
-		if (localPlayer == null || npc == null)
-		{
-			return;
-		}
-
-		// Consumed even when loot isn't sent, so it can't be attached to a later kill
-		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
-		if (!config.sendLoot())
-		{
-			return;
-		}
-
-		postEvent(new LootEvent(common(localPlayer), npc.getName(), npc.getId(), killTime,
-			killTime != null && lastKillTimePersonalBest, null, null, toDrops(event.getItems())));
-	}
-
 	/**
-	 * Fired by the Loot Tracker plugin. NPC loot is already handled by onNpcLootReceived,
-	 * so only non-NPC sources (reward chests, clue caskets etc.) are handled here. These are
-	 * sent as the same loot event with the Loot Tracker name (e.g. "Fractured Archive") as the
-	 * source, so the API can treat them the same way.
+	 * Fired by the Loot Tracker plugin, for NPC kills and for non-NPC sources (reward chests,
+	 * clue caskets etc.). Both are sent as the same loot event, chests with the Loot Tracker name
+	 * (e.g. "Fractured Archive") as the source, so the API can treat them the same way.
+	 *
+	 * NPC loot is the list the game itself reports for the kill, wherever the items end up. RuneLite's
+	 * NpcLootReceived only sees items that land under the dead NPC, so it misses bosses like the Mad Angel.
+	 * Pickpocket and player kill loot have their own types and are not sent.
 	 */
 	@Subscribe
 	public void onLootReceived(LootReceived event)
 	{
 		Player localPlayer = client.getLocalPlayer();
-		if (localPlayer == null || event.getType() != LootRecordType.EVENT)
+		if (localPlayer == null)
+		{
+			return;
+		}
+
+		if (event.getType() == LootRecordType.NPC)
+		{
+			onNpcLoot(localPlayer, event);
+			return;
+		}
+
+		if (event.getType() != LootRecordType.EVENT)
 		{
 			return;
 		}
@@ -326,6 +321,36 @@ public class PostiePetePlugin extends Plugin
 
 		postEvent(new LootEvent(common(localPlayer), event.getName(), null, completionTime, personalBest, stage,
 			raid, toDrops(event.getItems())));
+	}
+
+	private void onNpcLoot(Player localPlayer, LootReceived event)
+	{
+		// Consumed even when loot isn't sent, so it can't be attached to a later kill
+		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		if (!config.sendLoot())
+		{
+			return;
+		}
+
+		postEvent(new LootEvent(common(localPlayer), event.getName(), npcId(event.getMetadata()), killTime,
+			killTime != null && lastKillTimePersonalBest, null, null, toDrops(event.getItems())));
+	}
+
+	/**
+	 * The Loot Tracker passes the NPC id as the metadata of NPC loot, except for a few NPCs where it
+	 * passes a map instead (Cave horror has the id under "id"). Anything else has no id.
+	 */
+	static Integer npcId(Object metadata)
+	{
+		if (metadata instanceof Integer)
+		{
+			return (Integer) metadata;
+		}
+		if (metadata instanceof Map && ((Map<?, ?>) metadata).get("id") instanceof Integer)
+		{
+			return (Integer) ((Map<?, ?>) metadata).get("id");
+		}
+		return null;
 	}
 
 	/**
