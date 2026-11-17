@@ -9,53 +9,113 @@ import lombok.Value;
 class LootEvent extends PlayerItemsEvent
 {
 	/**
-	 * Where the loot came from: the NPC name for kills (e.g. "Vorkath"), or the Loot
-	 * Tracker's name for other sources (e.g. "Fractured Archive", "Clue Scroll (Hard)").
+	 * What the loot came from: its name, kill count, kill time and personal best.
 	 */
-	final String source;
+	final Source source;
 
 	/**
-	 * The NPC's ID for kills (e.g. 8061 for Vorkath), or null for non-NPC sources.
-	 */
-	final Integer npcId;
-
-	/**
-	 * Kill / completion duration in seconds (e.g. 83.4), or null if the game didn't report one.
-	 */
-	final Double duration;
-	final boolean personalBest;
-
-	/**
-	 * How far the run got when the loot was claimed, for activities where loot can be claimed
-	 * early: the Fortis Colosseum wave (1-12) or the Doom of Mokhaiotl delve level. Null otherwise.
-	 */
-	final Integer stage;
-
-	/**
-	 * Team and path details for raid reward chests (currently the Fractured Archive). Null otherwise.
+	 * Team, room times and purples for raid reward chests (currently the Fractured Archive). Null otherwise.
 	 */
 	final Raid raid;
-
-	/**
-	 * The game's kill count message that came with the loot, e.g. "Theatre of Blood: Hard Mode" 40. Names the
-	 * boss or raid (with its mode) where the source can't: raid chests are named without their mode, and some
-	 * bosses' loot comes from another NPC. Null when no kill count message came with the loot.
-	 */
-	final Kill kill;
 	final List<Drop> drops;
 
-	LootEvent(Common common, String source, Integer npcId, Double duration, boolean personalBest, Integer stage,
-		Raid raid, Kill kill, List<Drop> drops)
+	LootEvent(Common common, Source source, Raid raid, List<Drop> drops)
 	{
 		super(LOOT, common);
 		this.source = source;
-		this.npcId = npcId;
-		this.duration = duration;
-		this.personalBest = personalBest;
-		this.stage = stage;
 		this.raid = raid;
-		this.kill = kill;
 		this.drops = drops;
+	}
+
+	@Value
+	static class Source
+	{
+		/**
+		 * The boss, raid or activity: the kill count message's name when one came with the loot (e.g. "Theatre of
+		 * Blood: Hard Mode", "Leviathan", "Barrows chest"), otherwise the Loot Tracker's name (e.g. "Vorkath",
+		 * "Reward cart (Wintertodt)", "Clue Scroll (Hard)").
+		 */
+		String name;
+
+		/**
+		 * The Loot Tracker's name when it differs from name, e.g. "Theatre of Blood" for every raid mode, or
+		 * "The Leviathan" for "Leviathan". Null when they are the same, or when name already is the Loot
+		 * Tracker's name (no kill count message came with the loot).
+		 */
+		String lootName;
+
+		/**
+		 * The NPC's ID for kills (e.g. 8061 for Vorkath), or null for non-NPC sources.
+		 */
+		Integer npcId;
+
+		/**
+		 * The kill count after this kill, from the kill count message. Null when no kill count message came
+		 * with the loot; name is then the Loot Tracker's name.
+		 */
+		Integer killCount;
+
+		/**
+		 * Kill / completion duration in seconds (e.g. 83.4), or null if the game didn't report one.
+		 */
+		Double duration;
+
+		/**
+		 * The personal best in seconds as the game reported it with the duration: the duration itself for a new
+		 * personal best, otherwise the "Personal best:" time. Null when the game didn't report one.
+		 */
+		Double personalBest;
+
+		/**
+		 * How far the run got when the loot was claimed, for activities where loot can be claimed early: the
+		 * Fortis Colosseum wave (1-12) or the Doom of Mokhaiotl delve level. Null otherwise.
+		 */
+		Integer wave;
+
+		/**
+		 * Builds the source from the Loot Tracker's name and the kill count message that came with the loot, if any.
+		 */
+		static Source of(String lootTrackerName, Kill kill, Integer npcId, KillTime killTime, Integer wave)
+		{
+			String name = kill != null ? kill.getName() : lootTrackerName;
+			String lootName = lootTrackerName != null && !lootTrackerName.equals(name) ? lootTrackerName : null;
+			return new Source(name, lootName, npcId, kill != null ? kill.getCount() : null,
+				killTime != null ? killTime.getDuration() : null,
+				killTime != null ? killTime.getPersonalBest() : null,
+				wave);
+		}
+	}
+
+	/**
+	 * A kill count message: the boss or raid as it names it and the count. Sent as the source's name and killCount.
+	 */
+	@Value
+	static class Kill
+	{
+		/**
+		 * The boss or raid as the kill count message names it, e.g. "TzKal-Zuk", "Theatre of Blood: Hard Mode",
+		 * "Chambers of Xeric Challenge Mode", "Wintertodt" or "Barrows chest".
+		 */
+		String name;
+
+		/**
+		 * The kill count after this kill, e.g. 40.
+		 */
+		int count;
+	}
+
+	/**
+	 * A kill or completion time message: the duration and the personal best it reported.
+	 */
+	@Value
+	static class KillTime
+	{
+		double duration;
+
+		/**
+		 * The duration for a new personal best, the "Personal best:" time otherwise, or null if neither was shown.
+		 */
+		Double personalBest;
 	}
 
 	@Value
@@ -74,16 +134,9 @@ class LootEvent extends PlayerItemsEvent
 		List<String> team;
 
 		/**
-		 * Fractured Archive: the boss the team picked at each of the three path choices, in order:
-		 * the 2nd boss ("Ezekiel" or "Bork and the Smorks"), the 3rd ("Moia" or "Dreadnoth the Jellied")
-		 * and the 4th ("The Dagon'hai" or "Xarth"). Always 3 entries, an entry is null if the boss
-		 * wasn't seen being fought (e.g. the plugin was enabled mid-raid).
-		 */
-		List<String> path;
-
-		/**
-		 * Each boss's duration, in the order fought, e.g. Archive Guardian, Bork, Moia, Xarth, Ocellus.
-		 * Empty if none were seen (e.g. the plugin was enabled mid-raid).
+		 * Each boss's duration, in the order fought, e.g. Archive Guardian, Bork, Moia, Xarth, Ocellus. The
+		 * Fractured Archive's path (the boss picked at each choice) is the 2nd to 4th boss. Empty if none were
+		 * seen (e.g. the plugin was enabled mid-raid).
 		 */
 		List<Split> splits;
 
@@ -92,21 +145,6 @@ class LootEvent extends PlayerItemsEvent
 		 * own included, in the order announced. Empty when nobody got one.
 		 */
 		List<Purple> purples;
-	}
-
-	@Value
-	static class Kill
-	{
-		/**
-		 * The boss or raid as the kill count message names it, e.g. "TzKal-Zuk", "Theatre of Blood: Hard Mode",
-		 * "Chambers of Xeric Challenge Mode", "Wintertodt" or "Barrows chest".
-		 */
-		String name;
-
-		/**
-		 * The kill count after this kill, e.g. 40.
-		 */
-		int count;
 	}
 
 	@Value
@@ -127,8 +165,7 @@ class LootEvent extends PlayerItemsEvent
 	static class Split
 	{
 		/**
-		 * Boss name as the game writes it in its completion message, e.g. "Bork". Can differ from the
-		 * path's names, which are the OSRS Wiki's (e.g. "Bork and the Smorks").
+		 * Boss name as the game writes it in its completion message, e.g. "Bork".
 		 */
 		String boss;
 

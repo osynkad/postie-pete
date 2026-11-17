@@ -24,12 +24,10 @@ import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
-import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
-import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarClientID;
@@ -67,10 +65,12 @@ public class PostiePetePlugin extends Plugin
 
 	// Matches boss kill duration messages, e.g. "Fight duration: <col=ff0000>1:23.40</col>. Personal best: 1:20.00"
 	// or "Fight duration: <col=ff0000>1:19.80</col> (new personal best)". Same formats as RuneLite's chat commands plugin.
-	private static final Pattern KILL_DURATION_PATTERN = Pattern.compile(
+	// The personal best time can be coloured too.
+	static final Pattern KILL_DURATION_PATTERN = Pattern.compile(
 		"(?i)(?:(?:Fight |Lap |Challenge |Corrupted challenge )?duration:|Subdued in|(?<!total )completion time:"
 			+ "|The Fractured Archive: Total completion time:) "
-			+ "(?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)</col>(?<newpb> \\(new personal best\\))?");
+			+ "(?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)</col>(?:(?<newpb> \\(new personal best\\))"
+			+ "|\\.? ?Personal best: (?:</col>)?(?:<col=[0-9a-f]{6}>|@.+?@)?(?<pb>[0-9:]+(?:\\.[0-9]+)?))?");
 
 	// "CA_ID:648|Congratulations, you've completed a hard combat task: @ach_comp@Task Name (3 points).", tags removed.
 	// The game puts the task id in front of the message and colours the task name with an @...@ code, which
@@ -188,8 +188,7 @@ public class PostiePetePlugin extends Plugin
 
 	private Gson gson;
 
-	private Double lastKillTime;
-	private boolean lastKillTimePersonalBest;
+	private LootEvent.KillTime lastKillTime;
 	private int lastKillTimeTick;
 
 	private Integer lastColosseumWave;
@@ -291,8 +290,8 @@ public class PostiePetePlugin extends Plugin
 
 	/**
 	 * Fired by the Loot Tracker plugin, for NPC kills and for non-NPC sources (reward chests,
-	 * clue caskets etc.). Both are sent as the same loot event, chests with the Loot Tracker name
-	 * (e.g. "Fractured Archive") as the source, so the API can treat them the same way.
+	 * clue caskets etc.). Both are sent as the same loot event, so the API can treat them the same way. The
+	 * source is named by the kill count message that came with the loot, or else by the Loot Tracker.
 	 *
 	 * NPC loot is the list the game itself reports for the kill, wherever the items end up. RuneLite's
 	 * NpcLootReceived only sees items that land under the dead NPC, so it misses bosses like the Mad Angel.
@@ -318,29 +317,26 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		Double completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
+		LootEvent.KillTime completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
 		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), client.getTickCount());
-		boolean personalBest = completionTime != null && lastKillTimePersonalBest;
-		Integer stage = null;
+		Integer wave = null;
 		LootEvent.Raid raid = null;
 
 		// Loot can be claimed after any wave / delve level. Send how far the run got, and a duration
-		// only for a full run. The game only reports per-wave / per-level personal bests, so the API
-		// derives run personal bests from the durations.
+		// only for a full run. The game only reports per-wave / per-level personal bests, so no personal
+		// best is sent; the API derives run personal bests from the durations.
 		if (COLOSSEUM.equals(event.getName()))
 		{
-			stage = lastColosseumWave;
-			completionTime = stage != null && stage >= COLOSSEUM_FULL_RUN_WAVES
-				? ticksToSeconds(client.getVarpValue(VarPlayerID.COLOSSEUM_TOTAL_DURATION))
+			wave = lastColosseumWave;
+			completionTime = wave != null && wave >= COLOSSEUM_FULL_RUN_WAVES
+				? withoutPersonalBest(ticksToSeconds(client.getVarpValue(VarPlayerID.COLOSSEUM_TOTAL_DURATION)))
 				: null;
-			personalBest = false;
 		}
 		else if (DOOM_OF_MOKHAIOTL.equals(event.getName()))
 		{
 			// The Loot Tracker passes the delve level as metadata
-			stage = event.getMetadata() instanceof Integer ? (Integer) event.getMetadata() : null;
-			completionTime = stage != null && stage >= DOOM_FULL_RUN_LEVELS ? doomFullRunDuration : null;
-			personalBest = false;
+			wave = event.getMetadata() instanceof Integer ? (Integer) event.getMetadata() : null;
+			completionTime = wave != null && wave >= DOOM_FULL_RUN_LEVELS ? withoutPersonalBest(doomFullRunDuration) : null;
 		}
 		else if (FracturedArchive.LOOT_SOURCE.equals(event.getName()))
 		{
@@ -355,14 +351,14 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), event.getName(), null, completionTime, personalBest, stage,
-			raid, kill, toDrops(event.getItems())));
+		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(event.getName(), kill, null, completionTime, wave),
+			raid, toDrops(event.getItems())));
 	}
 
 	private void onNpcLoot(Player localPlayer, LootReceived event)
 	{
 		// Consumed even when loot isn't sent, so it can't be attached to a later kill
-		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		LootEvent.KillTime killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
 		LootEvent.Kill kill = killCounts.claimForNpcLoot(client.getTickCount());
 		log.debug("NPC loot: {} (tick {}), kill count {}", event.getName(), client.getTickCount(), kill);
 		if (!config.sendLoot())
@@ -370,8 +366,9 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), event.getName(), npcId(event.getMetadata()), killTime,
-			killTime != null && lastKillTimePersonalBest, null, null, kill, toDrops(event.getItems())));
+		postEvent(new LootEvent(common(localPlayer),
+			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null),
+			null, toDrops(event.getItems())));
 	}
 
 	/**
@@ -389,19 +386,6 @@ public class PostiePetePlugin extends Plugin
 			return (Integer) ((Map<?, ?>) metadata).get("id");
 		}
 		return null;
-	}
-
-	/**
-	 * Tracks which Fractured Archive path bosses the team fights. Only hitsplats the player can see
-	 * are reported, so this only picks up bosses in the player's own raid.
-	 */
-	@Subscribe
-	public void onHitsplatApplied(HitsplatApplied event)
-	{
-		if (event.getActor() instanceof NPC)
-		{
-			fracturedArchive.onNpcHit(((NPC) event.getActor()).getId());
-		}
 	}
 
 	@Subscribe
@@ -450,12 +434,12 @@ public class PostiePetePlugin extends Plugin
 
 	/**
 	 * A kill the game reported no loot for (e.g. the Inferno), sent as loot with no drops so it still counts as a
-	 * kill with its duration. The source is the kill count message's name.
+	 * kill with its duration. The source is the kill count message's name, with no Loot Tracker name.
 	 */
 	private void onKillWithoutLoot(LootEvent.Kill kill)
 	{
 		// Consumed even when loot isn't sent, so it can't be attached to a later kill
-		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		LootEvent.KillTime killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
 		Player localPlayer = client.getLocalPlayer();
 		log.debug("Kill without loot: {} {}, duration {}", kill.getName(), kill.getCount(), killTime);
 		if (localPlayer == null || !config.sendLoot())
@@ -463,8 +447,8 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), kill.getName(), null, killTime,
-			killTime != null && lastKillTimePersonalBest, null, null, kill, Collections.emptyList()));
+		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(null, kill, null, killTime, null),
+			null, Collections.emptyList()));
 	}
 
 	@Subscribe
@@ -603,8 +587,7 @@ public class PostiePetePlugin extends Plugin
 		matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
 		if (matcher.find())
 		{
-			lastKillTime = parseDuration(matcher.group("time"));
-			lastKillTimePersonalBest = matcher.group("newpb") != null;
+			lastKillTime = parseKillTime(matcher);
 			lastKillTimeTick = tick;
 			return;
 		}
@@ -683,15 +666,42 @@ public class PostiePetePlugin extends Plugin
 	 * Returns the last reported duration if it is recent enough, and consumes it so it
 	 * can't be attached to a later, unrelated event.
 	 */
-	private Double consumeKillTime(int maxAgeTicks)
+	private LootEvent.KillTime consumeKillTime(int maxAgeTicks)
 	{
-		Double killTime = null;
+		LootEvent.KillTime killTime = null;
 		if (lastKillTime != null && client.getTickCount() - lastKillTimeTick <= maxAgeTicks)
 		{
 			killTime = lastKillTime;
 		}
 		lastKillTime = null;
 		return killTime;
+	}
+
+	/**
+	 * The duration and personal best of a {@link #KILL_DURATION_PATTERN} match: the duration itself for a new
+	 * personal best, the "Personal best:" time if the message shows one, otherwise none.
+	 */
+	static LootEvent.KillTime parseKillTime(Matcher matcher)
+	{
+		double duration = parseDuration(matcher.group("time"));
+		Double personalBest = null;
+		if (matcher.group("newpb") != null)
+		{
+			personalBest = duration;
+		}
+		else if (matcher.group("pb") != null)
+		{
+			personalBest = parseDuration(matcher.group("pb"));
+		}
+		return new LootEvent.KillTime(duration, personalBest);
+	}
+
+	/**
+	 * A duration the game reports no personal best with, or null if there is none.
+	 */
+	private static LootEvent.KillTime withoutPersonalBest(Double duration)
+	{
+		return duration != null ? new LootEvent.KillTime(duration, null) : null;
 	}
 
 	/**
