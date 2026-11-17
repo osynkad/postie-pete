@@ -69,6 +69,8 @@ New event types and new fields may be added in later versions. Ignore event type
 
 For Fortis Colosseum and Doom of Mokhaiotl, `duration` is only set for a full run: waves 1–12 for the Colosseum, delve levels 1–8 for Doom. A Doom run that continues past level 8 still gets the time at the end of level 8. Loot claimed earlier has `duration: null` but is otherwise a normal `loot` event.
 
+A few kills come with no loot at the kill: the **Inferno** and the **Fight Caves** (their cape and Tokkul are a reward, not a drop), and **Wintertodt** and **Tempoross** (rewards are claimed separately and aren't one per kill). When no loot comes with their kill count message, they are still sent as a `loot` event, with the kill count's name as `source` (e.g. `"TzKal-Zuk"`, `"Wintertodt"`), `npcId: null`, the kill's `duration` and `kill`, and an empty `drops` list.
+
 ```json
 {
   "eventType": "loot",

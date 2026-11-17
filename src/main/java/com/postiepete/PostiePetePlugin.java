@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -105,6 +106,10 @@ public class PostiePetePlugin extends Plugin
 	// Reward chests are opened some time after the completion message, ~10 minutes
 	private static final int CHEST_TIME_MAX_AGE_TICKS = 1000;
 
+	// NPC loot comes on the kill count message's own tick (seen in game), so a kill still unclaimed after this
+	// had no loot. Well within KILL_TIME_MAX_AGE_TICKS, so the kill keeps its duration.
+	private static final int KILL_WITHOUT_LOOT_TICKS = 10;
+
 	// RuneLite keeps each plugin's on/off state in the "runelite" config group, under the plugin's class name in
 	// lower case. No value means the plugin's default, which for the Loot Tracker is on.
 	static final String RUNELITE_GROUP = "runelite";
@@ -193,7 +198,8 @@ public class PostiePetePlugin extends Plugin
 
 	private final FracturedArchive fracturedArchive = new FracturedArchive();
 
-	private final KillCounts killCounts = new KillCounts(KILL_TIME_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS);
+	private final KillCounts killCounts = new KillCounts(KILL_TIME_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS,
+		KILL_WITHOUT_LOOT_TICKS);
 
 	// The collection log overview's "most recent item" varp is set to the item ID of each new
 	// collection log item. On login the game sends the existing value too, so changes are only
@@ -434,6 +440,31 @@ public class PostiePetePlugin extends Plugin
 			collectionLogReady = true;
 			log.debug("Collection log baseline: {}", lastCollectionLogItemId);
 		}
+
+		LootEvent.Kill killWithoutLoot = killCounts.takeKillWithoutLoot(client.getTickCount());
+		if (killWithoutLoot != null)
+		{
+			onKillWithoutLoot(killWithoutLoot);
+		}
+	}
+
+	/**
+	 * A kill the game reported no loot for (e.g. the Inferno), sent as loot with no drops so it still counts as a
+	 * kill with its duration. The source is the kill count message's name.
+	 */
+	private void onKillWithoutLoot(LootEvent.Kill kill)
+	{
+		// Consumed even when loot isn't sent, so it can't be attached to a later kill
+		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		Player localPlayer = client.getLocalPlayer();
+		log.debug("Kill without loot: {} {}, duration {}", kill.getName(), kill.getCount(), killTime);
+		if (localPlayer == null || !config.sendLoot())
+		{
+			return;
+		}
+
+		postEvent(new LootEvent(common(localPlayer), kill.getName(), null, killTime,
+			killTime != null && lastKillTimePersonalBest, null, null, kill, Collections.emptyList()));
 	}
 
 	@Subscribe
