@@ -34,9 +34,11 @@ import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarClientID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
@@ -103,6 +105,14 @@ public class PostiePetePlugin extends Plugin
 	// Reward chests are opened some time after the completion message, ~10 minutes
 	private static final int CHEST_TIME_MAX_AGE_TICKS = 1000;
 
+	// RuneLite keeps each plugin's on/off state in the "runelite" config group, under the plugin's class name in
+	// lower case. No value means the plugin's default, which for the Loot Tracker is on.
+	static final String RUNELITE_GROUP = "runelite";
+	static final String LOOT_TRACKER_KEY = "loottrackerplugin";
+
+	static final String LOOT_TRACKER_OFF_MESSAGE = "Postie Pete can't send loot while the Loot Tracker plugin is"
+		+ " turned off. Turn it on in RuneLite's plugin list.";
+
 	// Regular rune pouch uses the first 3 slots, divine rune pouch uses all 4
 	private static final int[] RUNE_POUCH_TYPE_VARBITS = {
 		VarbitID.RUNE_POUCH_TYPE_1,
@@ -160,6 +170,9 @@ public class PostiePetePlugin extends Plugin
 	private ConfigManager configManager;
 
 	@Inject
+	private ClientThread clientThread;
+
+	@Inject
 	private EventBus eventBus;
 
 	@Inject
@@ -186,6 +199,9 @@ public class PostiePetePlugin extends Plugin
 	private boolean collectionLogReady;
 	private int lastCollectionLogItemId;
 
+	// Whether the Loot Tracker has been checked since logging in, so the warning shows once per login, not per hop
+	private boolean lootTrackerChecked;
+
 	@Override
 	protected void startUp() throws Exception
 	{
@@ -197,6 +213,16 @@ public class PostiePetePlugin extends Plugin
 		eventBus.register(collectionLogReader);
 		combatAchievementReader.setOnRead(this::onCombatAchievementsRead);
 		eventBus.register(combatAchievementReader);
+		// Turned on while already logged in: no login to wait for
+		lootTrackerChecked = false;
+		clientThread.invokeLater(() ->
+		{
+			if (client.getGameState() == GameState.LOGGED_IN)
+			{
+				lootTrackerChecked = true;
+				warnIfLootTrackerOff();
+			}
+		});
 		log.debug("Postie Pete started!");
 	}
 
@@ -375,6 +401,18 @@ public class PostiePetePlugin extends Plugin
 		{
 			collectionLogReady = false;
 		}
+
+		// The Loot Tracker warning shows once per login, so a hop doesn't repeat it
+		if (state == GameState.LOGIN_SCREEN)
+		{
+			lootTrackerChecked = false;
+		}
+		else if (state == GameState.LOGGED_IN && !lootTrackerChecked)
+		{
+			lootTrackerChecked = true;
+			// Once the login's game state change has been handled, so the chatbox is ready
+			clientThread.invokeLater(this::warnIfLootTrackerOff);
+		}
 	}
 
 	/**
@@ -420,6 +458,43 @@ public class PostiePetePlugin extends Plugin
 
 		String itemName = itemManager.getItemComposition(itemId).getName();
 		postEvent(new CollectionLogEvent(common(localPlayer), itemName, itemId));
+	}
+
+	/**
+	 * Warns straight away when the Loot Tracker is turned off, or loot sending is turned on while it is off.
+	 */
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		boolean lootTrackerChanged = RUNELITE_GROUP.equals(event.getGroup()) && LOOT_TRACKER_KEY.equals(event.getKey());
+		boolean sendLootChanged = PostiePeteConfig.GROUP.equals(event.getGroup())
+			&& PostiePeteConfig.SEND_LOOT_KEY.equals(event.getKey());
+		if (lootTrackerChanged || sendLootChanged)
+		{
+			clientThread.invokeLater(this::warnIfLootTrackerOff);
+		}
+	}
+
+	/**
+	 * Loot only reaches this plugin through the Loot Tracker's LootReceived event, so with the Loot Tracker
+	 * turned off nothing is sent. Tells the player in chat, if they are logged in and want loot sent.
+	 */
+	private void warnIfLootTrackerOff()
+	{
+		if (client.getGameState() != GameState.LOGGED_IN || !config.sendLoot()
+			|| isPluginOn(configManager.getConfiguration(RUNELITE_GROUP, LOOT_TRACKER_KEY)))
+		{
+			return;
+		}
+		client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", LOOT_TRACKER_OFF_MESSAGE, null);
+	}
+
+	/**
+	 * Reads a plugin's on/off config value: on unless it says "false". No value means on, the Loot Tracker's default.
+	 */
+	static boolean isPluginOn(String value)
+	{
+		return value == null || Boolean.parseBoolean(value);
 	}
 
 	@Subscribe
