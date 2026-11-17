@@ -4,7 +4,8 @@ import java.util.List;
 import lombok.Value;
 
 /**
- * Every item in the player's collection log, read when the collection log is opened.
+ * Every item in the player's collection log, read when the collection log is opened. Like every
+ * snapshot, it carries no player items.
  */
 class CollectionLogSnapshotEvent extends PostieEvent
 {

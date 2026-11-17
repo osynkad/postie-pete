@@ -56,7 +56,8 @@ public interface PostiePeteConfig extends Config
 	@ConfigItem(
 		keyName = "includePlayerItems",
 		name = "Include player items",
-		description = "Send equipment, inventory, rune pouch and quiver contents with every event",
+		description = "Send equipment, inventory, rune pouch and quiver contents with loot, collection log and combat"
+			+ " achievement events. Snapshots never include them.",
 		position = 1
 	)
 	default boolean includePlayerItems()

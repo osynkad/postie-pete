@@ -20,7 +20,10 @@ public class PostieEventTest
 		"2026-11-12T20:35:00Z", "ExamplePlayer", "-3412345678901234567",
 		new PlayerItems(Collections.emptyMap(), Collections.emptyMap(), null, null));
 
-	private static final Set<String> COMMON_FIELDS = set("eventType", "timestamp", "rsn", "accountHash", "playerItems");
+	private static final Set<String> IDENTITY_FIELDS = set("eventType", "timestamp", "rsn", "accountHash");
+
+	// Events that happen at a moment (loot, a new slot, a task) also carry the player's gear; snapshots don't
+	private static final Set<String> COMMON_FIELDS = with(IDENTITY_FIELDS, "playerItems");
 
 	@Test
 	public void lootEventHasOnlyLootFields()
@@ -89,7 +92,7 @@ public class PostieEventTest
 		JsonObject json = toJson(new CollectionLogSnapshotEvent(COMMON,
 			Collections.singletonList(new CollectionLogSnapshotEvent.Item(4151, 3)), 1));
 
-		assertEquals(with(COMMON_FIELDS, "items", "obtainedSlots"), json.keySet());
+		assertEquals(with(IDENTITY_FIELDS, "items", "obtainedSlots"), json.keySet());
 		assertEquals("collection_log_snapshot", json.get("eventType").getAsString());
 		JsonObject item = json.getAsJsonArray("items").get(0).getAsJsonObject();
 		assertEquals(set("itemId", "quantity"), item.keySet());
@@ -138,7 +141,7 @@ public class PostieEventTest
 				new CombatAchievementSnapshotEvent.TierProgress("easy", 2, 33, 33),
 				new CombatAchievementSnapshotEvent.TierProgress("medium", 1, 41, null))));
 
-		assertEquals(with(COMMON_FIELDS, "completedTaskIds", "completedTasks", "points", "tier", "tiers"), json.keySet());
+		assertEquals(with(IDENTITY_FIELDS, "completedTaskIds", "completedTasks", "points", "tier", "tiers"), json.keySet());
 		assertEquals("combat_achievement_snapshot", json.get("eventType").getAsString());
 		assertEquals(3, json.get("completedTasks").getAsInt());
 		assertEquals(402, json.getAsJsonArray("completedTaskIds").get(2).getAsInt());

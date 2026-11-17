@@ -5,6 +5,7 @@ import lombok.Value;
 
 /**
  * Every completed combat task, with the player's points and tier, read from the game after login.
+ * Like every snapshot, it carries no player items.
  */
 class CombatAchievementSnapshotEvent extends PostieEvent
 {

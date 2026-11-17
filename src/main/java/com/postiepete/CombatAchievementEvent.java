@@ -3,7 +3,7 @@ package com.postiepete;
 /**
  * A completed combat task.
  */
-class CombatAchievementEvent extends PostieEvent
+class CombatAchievementEvent extends PlayerItemsEvent
 {
 	/**
 	 * easy, medium, hard, elite, master or grandmaster.

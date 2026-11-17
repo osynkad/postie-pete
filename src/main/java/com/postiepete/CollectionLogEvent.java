@@ -3,7 +3,7 @@ package com.postiepete;
 /**
  * A new item added to the collection log.
  */
-class CollectionLogEvent extends PostieEvent
+class CollectionLogEvent extends PlayerItemsEvent
 {
 	/**
 	 * Item name from the game's item data, e.g. "Abyssal whip". Not unique: several collection

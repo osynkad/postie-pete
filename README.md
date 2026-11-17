@@ -24,7 +24,7 @@ Older versions had an **API URL** setting that `/events` was appended to. It is 
 | Setting | Default | Description |
 | --- | --- | --- |
 | **Endpoint URL** | empty | Full URL that events are POSTed to. Nothing is sent while it is empty. |
-| **Include player items** | on | Send the player's equipment, inventory, rune pouch and quiver with every event. When off, `playerItems` is `null`. |
+| **Include player items** | on | Send the player's equipment, inventory, rune pouch and quiver with loot, collection log and combat achievement events (snapshots never include them). When off, `playerItems` is `null`. |
 | **Loot** › **Send event** | on | Send `loot` events. |
 | **Collection log** › **Send event** | on | Send `collection_log` events. |
 | **Collection log** › **Send full log when opened** | off | Send a `collection_log_snapshot` event each time you open the collection log in game. |
@@ -33,7 +33,7 @@ Older versions had an **API URL** setting that `/events` was appended to. It is 
 
 ## Events
 
-Every event is a flat JSON object. All events share the [common fields](#common-fields), and each event type adds its own fields. Use `eventType` to tell event types apart. Every field of an event type is always present; optional values are `null`, never left out.
+Every event is a flat JSON object. All events share the [common fields](#common-fields), and each event type adds its own fields. Events about something that just happened (`loot`, `collection_log`, `combat_achievement`) also carry the player's items; snapshots don't. Use `eventType` to tell event types apart. Every field of an event type is always present; optional values are `null`, never left out.
 
 | Event type | Sent when |
 | --- | --- |
@@ -53,7 +53,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | `timestamp` | string | When the event happened, ISO 8601 in UTC to the second, e.g. `"2026-11-12T20:35:00Z"`. |
 | `rsn` | string | The player's current display name. Changes when the player changes name. |
 | `accountHash` | string | Stable account identifier that survives name changes. Use this, not `rsn`, to identify a player. A string because it is a 64-bit number. |
-| `playerItems` | object \| null | The player's items at the time of the event. See [Player items](#player-items). `null` when **Include player items** is off. |
+| `playerItems` | object \| null | `loot`, `collection_log` and `combat_achievement` only: the player's items at the time of the event. See [Player items](#player-items). `null` when **Include player items** is off. Snapshots don't have this field. |
 
 ### `loot`
 
@@ -121,7 +121,6 @@ Every item in the collection log, so slots obtained before the plugin was instal
   "timestamp": "2026-11-12T20:35:00Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
-  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
   "items": [
     { "itemId": 4151, "quantity": 3 },
     { "itemId": 13262, "quantity": 1 }
@@ -167,7 +166,6 @@ Every completed combat task with your points and tier (the example below uses ma
   "timestamp": "2026-11-12T20:35:00Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
-  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
   "completedTaskIds": [0, 1, 4, 17, 402],
   "completedTasks": 5,
   "points": 7,

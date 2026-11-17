@@ -6,7 +6,7 @@ import lombok.Value;
 /**
  * Loot from an NPC kill, a raid or reward chest, a clue casket etc.
  */
-class LootEvent extends PostieEvent
+class LootEvent extends PlayerItemsEvent
 {
 	/**
 	 * Where the loot came from: the NPC name for kills (e.g. "Vorkath"), or the Loot
