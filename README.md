@@ -64,6 +64,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | `duration` | number \| null | Kill or completion time in seconds, e.g. `83.4`, as reported by the game. `null` when the game doesn't report one, which is the case for most non-boss NPCs. |
 | `personalBest` | boolean | `true` when the game reported a new personal best for `duration`, otherwise `false`. Always `false` for Fortis Colosseum and Doom of Mokhaiotl, because the game only reports personal bests per wave or level there. Work out run personal bests from `duration` instead. |
 | `stage` | number \| null | How far the run got when the loot was claimed, for activities where loot can be claimed before the end: the **Fortis Colosseum** wave (1–12) or the **Doom of Mokhaiotl** delve level (can go past 8). `null` for all other loot. |
+| `kill` | object \| null | The game's kill count message that came with the loot, as `{ "name": string, "count": number }`, e.g. `{ "name": "Theatre of Blood: Hard Mode", "count": 40 }`. `name` is the boss or raid as the message names it, so it tells apart what `source` can't: raid chests are named without their mode (`source` is `"Theatre of Blood"` for normal, hard and entry mode), and some bosses' loot comes from another NPC. `null` when no kill count message came with the loot, which is the case for most non-boss NPCs, clue caskets etc. |
 | `drops` | array | The loot received, as a list of `{ "itemId": number, "itemName": string, "quantity": number, "value": number }`. `itemName` comes from the game's item data and isn't unique, so use `itemId` as the key. `value` is the GE value of **one** item when the drop happened, from the OSRS Wiki real-time prices that RuneLite loads (regardless of the player's "Use wiki item prices" setting). Multiply by `quantity` for the stack value. Untradeable variants that RuneLite maps to a tradeable item (e.g. Sanguine Torva → Torva, noted → unnoted) get that item's value. Other untradeable items are `0`, as is any item if RuneLite hasn't loaded prices yet. Coins are `1` and platinum tokens `1000`. |
 
 For Fortis Colosseum and Doom of Mokhaiotl, `duration` is only set for a full run: waves 1–12 for the Colosseum, delve levels 1–8 for Doom. A Doom run that continues past level 8 still gets the time at the end of level 8. Loot claimed earlier has `duration: null` but is otherwise a normal `loot` event.
@@ -80,6 +81,7 @@ For Fortis Colosseum and Doom of Mokhaiotl, `duration` is only set for a full ru
   "duration": 83.4,
   "personalBest": false,
   "stage": null,
+  "kill": { "name": "Vorkath", "count": 500 },
   "drops": [
     { "itemId": 536, "itemName": "Dragon bones", "quantity": 2, "value": 2450 },
     { "itemId": 995, "itemName": "Coins", "quantity": 15000, "value": 1 }

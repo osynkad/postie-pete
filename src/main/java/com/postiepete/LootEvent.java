@@ -35,10 +35,17 @@ class LootEvent extends PlayerItemsEvent
 	 * Team and path details for raid reward chests (currently the Fractured Archive). Null otherwise.
 	 */
 	final Raid raid;
+
+	/**
+	 * The game's kill count message that came with the loot, e.g. "Theatre of Blood: Hard Mode" 40. Names the
+	 * boss or raid (with its mode) where the source can't: raid chests are named without their mode, and some
+	 * bosses' loot comes from another NPC. Null when no kill count message came with the loot.
+	 */
+	final Kill kill;
 	final List<Drop> drops;
 
 	LootEvent(Common common, String source, Integer npcId, Double duration, boolean personalBest, Integer stage,
-		Raid raid, List<Drop> drops)
+		Raid raid, Kill kill, List<Drop> drops)
 	{
 		super(LOOT, common);
 		this.source = source;
@@ -47,6 +54,7 @@ class LootEvent extends PlayerItemsEvent
 		this.personalBest = personalBest;
 		this.stage = stage;
 		this.raid = raid;
+		this.kill = kill;
 		this.drops = drops;
 	}
 
@@ -84,6 +92,21 @@ class LootEvent extends PlayerItemsEvent
 		 * own included, in the order announced. Empty when nobody got one.
 		 */
 		List<Purple> purples;
+	}
+
+	@Value
+	static class Kill
+	{
+		/**
+		 * The boss or raid as the kill count message names it, e.g. "TzKal-Zuk", "Theatre of Blood: Hard Mode",
+		 * "Chambers of Xeric Challenge Mode", "Wintertodt" or "Barrows chest".
+		 */
+		String name;
+
+		/**
+		 * The kill count after this kill, e.g. 40.
+		 */
+		int count;
 	}
 
 	@Value

@@ -193,6 +193,8 @@ public class PostiePetePlugin extends Plugin
 
 	private final FracturedArchive fracturedArchive = new FracturedArchive();
 
+	private final KillCounts killCounts = new KillCounts(KILL_TIME_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS);
+
 	// The collection log overview's "most recent item" varp is set to the item ID of each new
 	// collection log item. On login the game sends the existing value too, so changes are only
 	// treated as new items once the player is fully logged in and a baseline has been taken.
@@ -234,6 +236,7 @@ public class PostiePetePlugin extends Plugin
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
 		fracturedArchive.reset();
+		killCounts.reset();
 		collectionLogReady = false;
 		lastCollectionLogItemId = 0;
 		eventBus.unregister(collectionLogReader);
@@ -310,6 +313,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		Double completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
+		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), client.getTickCount());
 		boolean personalBest = completionTime != null && lastKillTimePersonalBest;
 		Integer stage = null;
 		LootEvent.Raid raid = null;
@@ -346,20 +350,22 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		postEvent(new LootEvent(common(localPlayer), event.getName(), null, completionTime, personalBest, stage,
-			raid, toDrops(event.getItems())));
+			raid, kill, toDrops(event.getItems())));
 	}
 
 	private void onNpcLoot(Player localPlayer, LootReceived event)
 	{
 		// Consumed even when loot isn't sent, so it can't be attached to a later kill
 		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		LootEvent.Kill kill = killCounts.claimForNpcLoot(client.getTickCount());
+		log.debug("NPC loot: {} (tick {}), kill count {}", event.getName(), client.getTickCount(), kill);
 		if (!config.sendLoot())
 		{
 			return;
 		}
 
 		postEvent(new LootEvent(common(localPlayer), event.getName(), npcId(event.getMetadata()), killTime,
-			killTime != null && lastKillTimePersonalBest, null, null, toDrops(event.getItems())));
+			killTime != null && lastKillTimePersonalBest, null, null, kill, toDrops(event.getItems())));
 	}
 
 	/**
@@ -562,13 +568,21 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		int tick = client.getTickCount();
 		matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
 		if (matcher.find())
 		{
 			lastKillTime = parseDuration(matcher.group("time"));
 			lastKillTimePersonalBest = matcher.group("newpb") != null;
-			lastKillTimeTick = client.getTickCount();
+			lastKillTimeTick = tick;
 			return;
+		}
+
+		// Not returned: the Fractured Archive's completion message below is also a kill count message
+		LootEvent.Kill killCount = killCounts.onMessage(event.getMessage(), tick);
+		if (killCount != null)
+		{
+			log.debug("Kill count: {} {} (tick {})", killCount.getName(), killCount.getCount(), tick);
 		}
 
 		Player localPlayer = client.getLocalPlayer();

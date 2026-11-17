@@ -28,11 +28,12 @@ public class PostieEventTest
 	@Test
 	public void lootEventHasOnlyLootFields()
 	{
-		JsonObject json = toJson(new LootEvent(COMMON, "Vorkath", 8061, null, false, null, null,
+		JsonObject json = toJson(new LootEvent(COMMON, "Vorkath", 8061, null, false, null, null, null,
 			Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450))));
 
-		assertEquals(with(COMMON_FIELDS, "source", "npcId", "duration", "personalBest", "stage", "raid", "drops"),
-			json.keySet());
+		assertEquals(with(COMMON_FIELDS, "source", "npcId", "duration", "personalBest", "stage", "raid", "kill",
+			"drops"), json.keySet());
+		assertEquals(true, json.get("kill").isJsonNull());
 		assertEquals("loot", json.get("eventType").getAsString());
 		assertEquals("ExamplePlayer", json.get("rsn").getAsString());
 		assertEquals(8061, json.get("npcId").getAsInt());
@@ -53,7 +54,7 @@ public class PostieEventTest
 			Arrays.asList("Ezekiel", null, "Xarth"),
 			Arrays.asList(new LootEvent.Split("Archive Guardian", 123.0), new LootEvent.Split("Ezekiel", 141.6)),
 			Collections.singletonList(new LootEvent.Purple("Teammate", "Obligator (uncharged)")));
-		JsonObject json = toJson(new LootEvent(COMMON, "Fractured Archive", null, 1534.2, false, null, raid,
+		JsonObject json = toJson(new LootEvent(COMMON, "Fractured Archive", null, 1534.2, false, null, raid, null,
 			Collections.emptyList()));
 
 		JsonObject raidJson = json.getAsJsonObject("raid");
@@ -86,8 +87,20 @@ public class PostieEventTest
 	@Test
 	public void nonNpcLootSendsNullNpcId()
 	{
-		JsonObject loot = toJson(new LootEvent(COMMON, "Barrows", null, null, false, null, null, Collections.emptyList()));
+		JsonObject loot = toJson(new LootEvent(COMMON, "Barrows", null, null, false, null, null, null,
+			Collections.emptyList()));
 		assertEquals(true, loot.get("npcId").isJsonNull());
+	}
+
+	@Test
+	public void lootSendsItsKillCount()
+	{
+		JsonObject loot = toJson(new LootEvent(COMMON, "Theatre of Blood", null, 1234.5, false, null, null,
+			new LootEvent.Kill("Theatre of Blood: Hard Mode", 40), Collections.emptyList()));
+		JsonObject kill = loot.getAsJsonObject("kill");
+		assertEquals(set("name", "count"), kill.keySet());
+		assertEquals("Theatre of Blood: Hard Mode", kill.get("name").getAsString());
+		assertEquals(40, kill.get("count").getAsInt());
 	}
 
 	@Test
