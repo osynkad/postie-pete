@@ -2,6 +2,7 @@ package com.postiepete;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.util.regex.Matcher;
 import net.runelite.client.util.Text;
@@ -22,6 +23,7 @@ public class CombatAchievementPatternTest
 		assertTrue(matcher.matches());
 		assertEquals("hard", matcher.group("tier"));
 		assertEquals("Perfect Mad Angel", matcher.group("task"));
+		assertEquals("648", matcher.group("id"));
 	}
 
 	@Test
@@ -32,6 +34,7 @@ public class CombatAchievementPatternTest
 		assertTrue(matcher.matches());
 		assertEquals("elite", matcher.group("tier"));
 		assertEquals("Peach Conjurer", matcher.group("task"));
+		assertNull(matcher.group("id"));
 	}
 
 	@Test

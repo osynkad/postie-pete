@@ -132,11 +132,12 @@ public class PostieEventTest
 	@Test
 	public void combatAchievementEventHasOnlyCombatAchievementFields()
 	{
-		JsonObject json = toJson(new CombatAchievementEvent(COMMON, "hard", "Noxious Foe"));
+		JsonObject json = toJson(new CombatAchievementEvent(COMMON, "hard", "Noxious Foe", 402));
 
-		assertEquals(with(COMMON_FIELDS, "tier", "task"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "tier", "task", "taskId"), json.keySet());
 		assertEquals("combat_achievement", json.get("eventType").getAsString());
 		assertEquals("hard", json.get("tier").getAsString());
+		assertEquals(402, json.get("taskId").getAsInt());
 	}
 
 	@Test
@@ -144,9 +145,9 @@ public class PostieEventTest
 	{
 		PostieEvent.Common common = new PostieEvent.Common(
 			"2026-11-12T20:35:00Z", "ExamplePlayer", "-3412345678901234567", null);
-		JsonObject json = toJson(new CombatAchievementEvent(common, "hard", "Noxious Foe"));
+		JsonObject json = toJson(new CombatAchievementEvent(common, "hard", "Noxious Foe", null));
 
-		assertEquals(with(COMMON_FIELDS, "tier", "task"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "tier", "task", "taskId"), json.keySet());
 		assertEquals(true, json.get("playerItems").isJsonNull());
 	}
 

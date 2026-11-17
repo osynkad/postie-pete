@@ -137,6 +137,7 @@ Every item in the collection log, so slots obtained before the plugin was instal
 | --- | --- | --- |
 | `tier` | string | Combat task tier, lower case: `"easy"`, `"medium"`, `"hard"`, `"elite"`, `"master"` or `"grandmaster"`. |
 | `task` | string | Combat task name, e.g. `"Noxious Foe"`. |
+| `taskId` | number \| null | The game's task ID, e.g. `402`: the same IDs as `completedTaskIds` in [`combat_achievement_snapshot`](#combat_achievement_snapshot), so a task can be matched against a snapshot. `null` if the game's message didn't include it. |
 
 ```json
 {
@@ -146,7 +147,8 @@ Every item in the collection log, so slots obtained before the plugin was instal
   "accountHash": "-3412345678901234567",
   "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
   "tier": "hard",
-  "task": "Why Are You Running?"
+  "task": "Why Are You Running?",
+  "taskId": 402
 }
 ```
 

@@ -73,9 +73,9 @@ public class PostiePetePlugin extends Plugin
 
 	// "CA_ID:648|Congratulations, you've completed a hard combat task: @ach_comp@Task Name (3 points).", tags removed.
 	// The game puts the task id in front of the message and colours the task name with an @...@ code, which
-	// Text.removeTags leaves in. Older messages came without either.
+	// Text.removeTags leaves in. Older messages came without either. The id is the one snapshots send.
 	static final Pattern COMBAT_ACHIEVEMENT_PATTERN = Pattern.compile(
-		"(?:CA_ID:\\d+\\|)?Congratulations, you've completed an? (?<tier>\\w+) combat task: (?:@\\w+@)?(?<task>.+?)"
+		"(?:CA_ID:(?<id>\\d+)\\|)?Congratulations, you've completed an? (?<tier>\\w+) combat task: (?:@\\w+@)?(?<task>.+?)"
 			+ "(?: \\(\\d+ points?\\))?\\.?");
 
 	// "Wave 2 completed! Wave duration: @mes_hl_red@1:09.60</col>"
@@ -601,8 +601,9 @@ public class PostiePetePlugin extends Plugin
 		matcher = COMBAT_ACHIEVEMENT_PATTERN.matcher(message);
 		if (matcher.matches() && config.sendCombatAchievement())
 		{
+			String id = matcher.group("id");
 			postEvent(new CombatAchievementEvent(common(localPlayer),
-				matcher.group("tier").toLowerCase(), matcher.group("task")));
+				matcher.group("tier").toLowerCase(), matcher.group("task"), id == null ? null : Integer.valueOf(id)));
 		}
 	}
 
