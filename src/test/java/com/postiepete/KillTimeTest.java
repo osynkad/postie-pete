@@ -1,6 +1,7 @@
 package com.postiepete;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.util.regex.Matcher;
@@ -14,6 +15,7 @@ public class KillTimeTest
 		LootEvent.KillTime time = parse("Fight duration: <col=ff0000>1:19.80</col> (new personal best)");
 		assertEquals(79.8, time.getDuration(), 1e-9);
 		assertEquals(79.8, time.getPersonalBest(), 1e-9);
+		assertTrue(time.isNewPersonalBest());
 	}
 
 	@Test
@@ -22,6 +24,16 @@ public class KillTimeTest
 		LootEvent.KillTime time = parse("Fight duration: <col=ff0000>1:23.40</col>. Personal best: 1:20.00");
 		assertEquals(83.4, time.getDuration(), 1e-9);
 		assertEquals(80.0, time.getPersonalBest(), 1e-9);
+		assertFalse(time.isNewPersonalBest());
+	}
+
+	@Test
+	public void aTimeThatTiesThePersonalBestIsNotANewOne()
+	{
+		LootEvent.KillTime time = parse("Fight duration: <col=ff0000>1:20.00</col>. Personal best: 1:20.00");
+		assertEquals(80.0, time.getDuration(), 1e-9);
+		assertEquals(80.0, time.getPersonalBest(), 1e-9);
+		assertFalse(time.isNewPersonalBest());
 	}
 
 	@Test
@@ -47,6 +59,7 @@ public class KillTimeTest
 		LootEvent.KillTime time = parse("The Fractured Archive: Total completion time: <col=ef1020>18:05.80</col>");
 		assertEquals(1085.8, time.getDuration(), 1e-9);
 		assertNull(time.getPersonalBest());
+		assertFalse(time.isNewPersonalBest());
 	}
 
 	private static LootEvent.KillTime parse(String message)

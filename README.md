@@ -73,6 +73,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | `killCount` | number \| null | The kill count after this kill, from the game's kill count message. `null` when no kill count message came with the loot, which is the case for most non-boss NPCs, clue caskets, reward carts etc. So `killCount` is set exactly when `name` came from the kill count message. |
 | `duration` | number \| null | Kill or completion time in seconds, e.g. `83.4`, as reported by the game. `null` when the game doesn't report one, which is the case for most non-boss NPCs. Entry mode raids are sent with their time too: `name` tells the mode (e.g. `"Tombs of Amascut: Entry Mode"`), except for the Fractured Archive, whose kill count message is the same for every mode. |
 | `personalBest` | number \| null | The personal best in seconds as the game reported it with `duration`: `duration` itself for a new personal best, otherwise the "Personal best:" time in the message. `null` when the game showed none, and always for Fortis Colosseum and Doom of Mokhaiotl, because the game only reports personal bests per wave or level there (work out run personal bests from `duration` instead). |
+| `newPersonalBest` | boolean | `true` when the game's kill time message said "(new personal best)", otherwise `false`. A time that ties the personal best is not a new one: the game shows it as "Personal best:", so `duration` equals `personalBest` but `newPersonalBest` is `false`. Always `false` when `personalBest` is `null`. |
 | `wave` | number \| null | How far the run got when the loot was claimed, for activities where loot can be claimed before the end: the **Fortis Colosseum** wave (1–12) or the **Doom of Mokhaiotl** delve level (can go past 8). `null` for all other loot. |
 
 For Fortis Colosseum and Doom of Mokhaiotl, `duration` is only set for a full run: waves 1–12 for the Colosseum, delve levels 1–8 for Doom. A Doom run that continues past level 8 still gets the time at the end of level 8. Loot claimed earlier has `duration: null` but is otherwise a normal `loot` event.
@@ -102,6 +103,7 @@ A few kills come with no loot at the kill: the **Inferno** and the **Fight Caves
     "killCount": 212,
     "duration": 48.6,
     "personalBest": 41.2,
+    "newPersonalBest": false,
     "wave": null
   },
   "raid": null,
@@ -128,6 +130,7 @@ A Fractured Archive chest:
     "killCount": 75,
     "duration": 1085.8,
     "personalBest": 1025.2,
+    "newPersonalBest": false,
     "wave": null
   },
   "raid": {

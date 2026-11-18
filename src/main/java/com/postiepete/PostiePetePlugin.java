@@ -679,13 +679,15 @@ public class PostiePetePlugin extends Plugin
 
 	/**
 	 * The duration and personal best of a {@link #KILL_DURATION_PATTERN} match: the duration itself for a new
-	 * personal best, the "Personal best:" time if the message shows one, otherwise none.
+	 * personal best, the "Personal best:" time if the message shows one, otherwise none. newPersonalBest is set
+	 * only for "(new personal best)", so a time that ties the personal best is not a new one.
 	 */
 	static LootEvent.KillTime parseKillTime(Matcher matcher)
 	{
 		double duration = parseDuration(matcher.group("time"));
+		boolean newPersonalBest = matcher.group("newpb") != null;
 		Double personalBest = null;
-		if (matcher.group("newpb") != null)
+		if (newPersonalBest)
 		{
 			personalBest = duration;
 		}
@@ -693,7 +695,7 @@ public class PostiePetePlugin extends Plugin
 		{
 			personalBest = parseDuration(matcher.group("pb"));
 		}
-		return new LootEvent.KillTime(duration, personalBest);
+		return new LootEvent.KillTime(duration, personalBest, newPersonalBest);
 	}
 
 	/**
@@ -701,7 +703,7 @@ public class PostiePetePlugin extends Plugin
 	 */
 	private static LootEvent.KillTime withoutPersonalBest(Double duration)
 	{
-		return duration != null ? new LootEvent.KillTime(duration, null) : null;
+		return duration != null ? new LootEvent.KillTime(duration, null, false) : null;
 	}
 
 	/**

@@ -9,7 +9,7 @@ import lombok.Value;
 class LootEvent extends PlayerItemsEvent
 {
 	/**
-	 * What the loot came from: its name, kill count, kill time and personal best.
+	 * What the loot came from: its name, kill count, kill time and personal best, and whether it was a new one.
 	 */
 	final Source source;
 
@@ -67,6 +67,12 @@ class LootEvent extends PlayerItemsEvent
 		Double personalBest;
 
 		/**
+		 * True when the game's kill time message said "(new personal best)", false otherwise. A time that ties the
+		 * personal best is not a new one.
+		 */
+		boolean newPersonalBest;
+
+		/**
 		 * How far the run got when the loot was claimed, for activities where loot can be claimed early: the
 		 * Fortis Colosseum wave (1-12) or the Doom of Mokhaiotl delve level. Null otherwise.
 		 */
@@ -82,6 +88,7 @@ class LootEvent extends PlayerItemsEvent
 			return new Source(name, lootName, npcId, kill != null ? kill.getCount() : null,
 				killTime != null ? killTime.getDuration() : null,
 				killTime != null ? killTime.getPersonalBest() : null,
+				killTime != null && killTime.isNewPersonalBest(),
 				wave);
 		}
 	}
@@ -105,7 +112,7 @@ class LootEvent extends PlayerItemsEvent
 	}
 
 	/**
-	 * A kill or completion time message: the duration and the personal best it reported.
+	 * A kill or completion time message: the duration, the personal best it reported and whether it was a new one.
 	 */
 	@Value
 	static class KillTime
@@ -116,6 +123,11 @@ class LootEvent extends PlayerItemsEvent
 		 * The duration for a new personal best, the "Personal best:" time otherwise, or null if neither was shown.
 		 */
 		Double personalBest;
+
+		/**
+		 * True when the message said "(new personal best)".
+		 */
+		boolean newPersonalBest;
 	}
 
 	@Value
