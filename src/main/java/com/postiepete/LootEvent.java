@@ -46,5 +46,12 @@ class LootEvent extends PostieEvent
 		 */
 		String itemName;
 		int quantity;
+
+		/**
+		 * GE value of one item at the time of the drop, from the OSRS Wiki real-time prices
+		 * that RuneLite loads. Untradeable variants RuneLite knows about (e.g. Sanguine Torva) are
+		 * valued as their tradeable item. 0 for other untradeable items, or if prices haven't loaded.
+		 */
+		long value;
 	}
 }

@@ -23,7 +23,7 @@ public class PostieEventTest
 	public void lootEventHasOnlyLootFields()
 	{
 		JsonObject json = toJson(new LootEvent(COMMON, "Vorkath", 8061, null, false,
-			Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2))));
+			Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450))));
 
 		assertEquals(with(COMMON_FIELDS, "source", "npcId", "duration", "personalBest", "drops"), json.keySet());
 		assertEquals("loot", json.get("eventType").getAsString());
@@ -31,9 +31,10 @@ public class PostieEventTest
 		assertEquals(8061, json.get("npcId").getAsInt());
 		assertEquals(true, json.get("duration").isJsonNull());
 		JsonObject drop = json.getAsJsonArray("drops").get(0).getAsJsonObject();
-		assertEquals(set("itemId", "itemName", "quantity"), drop.keySet());
+		assertEquals(set("itemId", "itemName", "quantity", "value"), drop.keySet());
 		assertEquals(536, drop.get("itemId").getAsInt());
 		assertEquals("Dragon bones", drop.get("itemName").getAsString());
+		assertEquals(2450, drop.get("value").getAsLong());
 	}
 
 	@Test

@@ -389,13 +389,18 @@ public class PostiePetePlugin extends Plugin
 		return seconds + Double.parseDouble(parts[parts.length - 1]);
 	}
 
+	/**
+	 * Always uses the wiki real-time price, regardless of the player's "Use wiki item prices"
+	 * setting, so values are comparable between players.
+	 */
 	private List<LootEvent.Drop> toDrops(Collection<ItemStack> items)
 	{
 		return items.stream()
 			.map(item -> new LootEvent.Drop(
 				item.getId(),
 				itemManager.getItemComposition(item.getId()).getName(),
-				item.getQuantity()))
+				item.getQuantity(),
+				itemManager.getItemPriceWithSource(item.getId(), true)))
 			.collect(Collectors.toList());
 	}
 

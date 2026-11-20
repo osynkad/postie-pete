@@ -55,7 +55,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | `npcId` | number \| null | The NPC's ID for drops, e.g. `8061` for Vorkath. Some NPCs have several IDs (different forms or locations), so group by `source` if you want them together. `null` for non-NPC loot. |
 | `duration` | number \| null | Kill or completion time in seconds, e.g. `83.4`, as reported by the game. `null` when the game doesn't report one, which is the case for most non-boss NPCs. |
 | `personalBest` | boolean | `true` when the game reported a new personal best for `duration`, otherwise `false`. |
-| `drops` | array | The loot received, as a list of `{ "itemId": number, "itemName": string, "quantity": number }`. `itemName` comes from the game's item data and isn't unique, so use `itemId` as the key. |
+| `drops` | array | The loot received, as a list of `{ "itemId": number, "itemName": string, "quantity": number, "value": number }`. `itemName` comes from the game's item data and isn't unique, so use `itemId` as the key. `value` is the GE value of **one** item when the drop happened, from the OSRS Wiki real-time prices that RuneLite loads (regardless of the player's "Use wiki item prices" setting). Multiply by `quantity` for the stack value. Untradeable variants that RuneLite maps to a tradeable item (e.g. Sanguine Torva → Torva, noted → unnoted) get that item's value. Other untradeable items are `0`, as is any item if RuneLite hasn't loaded prices yet. Coins are `1` and platinum tokens `1000`. |
 
 ```json
 {
@@ -68,8 +68,8 @@ New event types and new fields may be added in later versions. Ignore event type
   "duration": 83.4,
   "personalBest": false,
   "drops": [
-    { "itemId": 536, "itemName": "Dragon bones", "quantity": 2 },
-    { "itemId": 995, "itemName": "Coins", "quantity": 15000 }
+    { "itemId": 536, "itemName": "Dragon bones", "quantity": 2, "value": 2450 },
+    { "itemId": 995, "itemName": "Coins", "quantity": 15000, "value": 1 }
   ]
 }
 ```
