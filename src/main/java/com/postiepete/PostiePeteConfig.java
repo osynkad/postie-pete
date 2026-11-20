@@ -44,17 +44,6 @@ public interface PostiePeteConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "includePlayerItems",
-		name = "Include player items",
-		description = "Send equipment, inventory, rune pouch and quiver contents with every event",
-		position = 1
-	)
-	default boolean includePlayerItems()
-	{
-		return true;
-	}
-
-	@ConfigItem(
 		keyName = "sendLoot",
 		name = "Send event",
 		description = "Send a loot event when you receive loot",

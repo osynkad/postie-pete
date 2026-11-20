@@ -5,11 +5,8 @@ import com.google.inject.Provides;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -17,17 +14,9 @@ import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
-import net.runelite.api.EnumComposition;
-import net.runelite.api.EnumID;
-import net.runelite.api.EquipmentInventorySlot;
-import net.runelite.api.Item;
-import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.events.ChatMessage;
-import net.runelite.api.gameval.InventoryID;
-import net.runelite.api.gameval.VarPlayerID;
-import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.NpcLootReceived;
@@ -76,21 +65,6 @@ public class PostiePetePlugin extends Plugin
 
 	// Reward chests are opened some time after the completion message, ~10 minutes
 	private static final int CHEST_TIME_MAX_AGE_TICKS = 1000;
-
-	// Regular rune pouch uses the first 3 slots, divine rune pouch uses all 4
-	private static final int[] RUNE_POUCH_TYPE_VARBITS = {
-		VarbitID.RUNE_POUCH_TYPE_1,
-		VarbitID.RUNE_POUCH_TYPE_2,
-		VarbitID.RUNE_POUCH_TYPE_3,
-		VarbitID.RUNE_POUCH_TYPE_4
-	};
-
-	private static final int[] RUNE_POUCH_QUANTITY_VARBITS = {
-		VarbitID.RUNE_POUCH_QUANTITY_1,
-		VarbitID.RUNE_POUCH_QUANTITY_2,
-		VarbitID.RUNE_POUCH_QUANTITY_3,
-		VarbitID.RUNE_POUCH_QUANTITY_4
-	};
 
 	@Inject
 	private Client client;
@@ -225,8 +199,7 @@ public class PostiePetePlugin extends Plugin
 		return new PostieEvent.Common(
 			Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(),
 			localPlayer.getName(),
-			accountHash(),
-			config.includePlayerItems() ? getPlayerItems() : null);
+			accountHash());
 	}
 
 	/**
@@ -275,80 +248,6 @@ public class PostiePetePlugin extends Plugin
 	{
 		long hash = client.getAccountHash();
 		return hash == -1 ? null : Long.toString(hash);
-	}
-
-	private PlayerItems getPlayerItems()
-	{
-		Map<String, PlayerItems.SlotItem> equipment = new LinkedHashMap<>();
-		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
-		if (worn != null)
-		{
-			for (EquipmentInventorySlot slot : EquipmentInventorySlot.values())
-			{
-				Item item = worn.getItem(slot.getSlotIdx());
-				if (item != null)
-				{
-					equipment.put(slot.name(), new PlayerItems.SlotItem(item.getId(), item.getQuantity()));
-				}
-			}
-		}
-
-		Map<String, PlayerItems.SlotItem> inventory = new LinkedHashMap<>();
-		ItemContainer inv = client.getItemContainer(InventoryID.INV);
-		if (inv != null)
-		{
-			for (int slot = 0; slot < inv.size(); slot++)
-			{
-				Item item = inv.getItem(slot);
-				if (item != null)
-				{
-					inventory.put(String.valueOf(slot), new PlayerItems.SlotItem(item.getId(), item.getQuantity()));
-				}
-			}
-		}
-
-		return new PlayerItems(equipment, inventory, getRunePouch(), getQuiver());
-	}
-
-	/**
-	 * Raw contents of the extra ammo slot (Dizana's quiver / bolt pouch). The game retains this
-	 * even when no quiver is worn, so the API decides whether it applies based on the equipment.
-	 */
-	private PlayerItems.SlotItem getQuiver()
-	{
-		int ammoId = client.getVarpValue(VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO);
-		int ammoQuantity = client.getVarpValue(VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO_AMOUNT);
-		if (ammoId == -1 || ammoQuantity <= 0)
-		{
-			return null;
-		}
-		return new PlayerItems.SlotItem(ammoId, ammoQuantity);
-	}
-
-	/**
-	 * Raw contents of the rune pouch. The game retains this even when no pouch is carried,
-	 * so the API decides whether it applies based on the inventory. Null if the pouch is empty.
-	 */
-	private List<PlayerItems.SlotItem> getRunePouch()
-	{
-		EnumComposition runeEnum = client.getEnum(EnumID.RUNEPOUCH_RUNE);
-		List<PlayerItems.SlotItem> runes = new ArrayList<>();
-		for (int i = 0; i < RUNE_POUCH_TYPE_VARBITS.length; i++)
-		{
-			int type = client.getVarbitValue(RUNE_POUCH_TYPE_VARBITS[i]);
-			int quantity = client.getVarbitValue(RUNE_POUCH_QUANTITY_VARBITS[i]);
-			if (type == 0 || quantity <= 0)
-			{
-				continue;
-			}
-
-			int runeId = runeEnum.getIntValue(type);
-			if (runeId > 0)
-			{
-				runes.add(new PlayerItems.SlotItem(runeId, quantity));
-			}
-		}
-		return runes.isEmpty() ? null : runes;
 	}
 
 	private void postEvent(PostieEvent event)

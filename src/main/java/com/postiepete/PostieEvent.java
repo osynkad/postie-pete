@@ -24,7 +24,6 @@ abstract class PostieEvent
 	 * string because it is a 64-bit value that JavaScript numbers can't represent exactly.
 	 */
 	final String accountHash;
-	final PlayerItems playerItems;
 
 	PostieEvent(String eventType, Common common)
 	{
@@ -32,7 +31,6 @@ abstract class PostieEvent
 		this.timestamp = common.timestamp;
 		this.rsn = common.rsn;
 		this.accountHash = common.accountHash;
-		this.playerItems = common.playerItems;
 	}
 
 	/**
@@ -44,6 +42,5 @@ abstract class PostieEvent
 		String timestamp;
 		String rsn;
 		String accountHash;
-		PlayerItems playerItems;
 	}
 }

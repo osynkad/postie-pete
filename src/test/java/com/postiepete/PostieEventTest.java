@@ -15,10 +15,9 @@ public class PostieEventTest
 	private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
 	private static final PostieEvent.Common COMMON = new PostieEvent.Common(
-		"2026-11-12T20:35:00Z", "ExamplePlayer", "-3412345678901234567",
-		new PlayerItems(Collections.emptyMap(), Collections.emptyMap(), null, null));
+		"2026-11-12T20:35:00Z", "ExamplePlayer", "-3412345678901234567");
 
-	private static final Set<String> COMMON_FIELDS = set("eventType", "timestamp", "rsn", "accountHash", "playerItems");
+	private static final Set<String> COMMON_FIELDS = set("eventType", "timestamp", "rsn", "accountHash");
 
 	@Test
 	public void lootEventHasOnlyLootFields()
@@ -62,17 +61,6 @@ public class PostieEventTest
 		assertEquals(with(COMMON_FIELDS, "tier", "task"), json.keySet());
 		assertEquals("combat_achievement", json.get("eventType").getAsString());
 		assertEquals("hard", json.get("tier").getAsString());
-	}
-
-	@Test
-	public void excludedPlayerItemsAreSentAsNull()
-	{
-		PostieEvent.Common common = new PostieEvent.Common(
-			"2026-11-12T20:35:00Z", "ExamplePlayer", "-3412345678901234567", null);
-		JsonObject json = toJson(new CombatAchievementEvent(common, "hard", "Noxious Foe"));
-
-		assertEquals(with(COMMON_FIELDS, "tier", "task"), json.keySet());
-		assertEquals(true, json.get("playerItems").isJsonNull());
 	}
 
 	private static JsonObject toJson(PostieEvent event)

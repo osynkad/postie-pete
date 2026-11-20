@@ -22,7 +22,6 @@ Any `2xx` response counts as success. Failed requests are not retried.
 | Setting | Default | Description |
 | --- | --- | --- |
 | **Endpoint URL** | empty | Full URL that events are POSTed to. Nothing is sent while it is empty. |
-| **Include player items** | on | Send the player's equipment, inventory, rune pouch and quiver with every event. When off, `playerItems` is `null`. |
 | **Loot** › **Send event** | on | Send `loot` events. |
 | **Collection log** › **Send event** | on | Send `collection_log` events. |
 | **Combat achievements** › **Send event** | on | Send `combat_achievement` events. |
@@ -47,7 +46,6 @@ New event types and new fields may be added in later versions. Ignore event type
 | `timestamp` | string | When the event happened, ISO 8601 in UTC to the second, e.g. `"2026-11-12T20:35:00Z"`. |
 | `rsn` | string | The player's current display name. Changes when the player changes name. |
 | `accountHash` | string | Stable account identifier that survives name changes. Use this, not `rsn`, to identify a player. A string because it is a 64-bit number. |
-| `playerItems` | object \| null | The player's items at the time of the event. See [Player items](#player-items). `null` when **Include player items** is off. |
 
 ### `loot`
 
@@ -65,7 +63,6 @@ New event types and new fields may be added in later versions. Ignore event type
   "timestamp": "2026-11-12T20:35:00Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
-  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
   "source": "Vorkath",
   "npcId": 8061,
   "duration": 83.4,
@@ -89,7 +86,6 @@ New event types and new fields may be added in later versions. Ignore event type
   "timestamp": "2026-11-12T20:35:00Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
-  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
   "itemName": "Vorkath's head"
 }
 ```
@@ -107,31 +103,12 @@ New event types and new fields may be added in later versions. Ignore event type
   "timestamp": "2026-11-12T20:35:00Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
-  "playerItems": { "equipment": { "...": "..." }, "inventory": { "...": "..." }, "rune_pouch": null, "quiver": null },
   "tier": "hard",
   "task": "Why Are You Running?"
 }
 ```
 
 Field order in the JSON is not guaranteed.
-
-### Player items
-
-```json
-{
-  "equipment": { "WEAPON": { "id": 4151, "quantity": 1 }, "AMMO": { "id": 11212, "quantity": 120 } },
-  "inventory": { "0": { "id": 4151, "quantity": 1 }, "5": { "id": 995, "quantity": 1000 } },
-  "rune_pouch": [{ "id": 554, "quantity": 15000 }, { "id": 560, "quantity": 8000 }],
-  "quiver": { "id": 21944, "quantity": 1617 }
-}
-```
-
-| Field | Description |
-| --- | --- |
-| `equipment` | Worn items, keyed by slot: `HEAD`, `CAPE`, `AMULET`, `WEAPON`, `BODY`, `SHIELD`, `LEGS`, `GLOVES`, `BOOTS`, `RING`, `AMMO`. Empty slots are left out. |
-| `inventory` | Inventory items, keyed by slot index `"0"` to `"27"`, left to right and top to bottom. Empty slots are left out. |
-| `rune_pouch` | Runes in the rune pouch (3 slots, or 4 for the divine rune pouch), or `null` if empty. |
-| `quiver` | The extra ammo slot from Dizana's quiver or the bolt pouch, or `null` if empty. |
 
 ## Requirements
 
