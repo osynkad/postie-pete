@@ -5,9 +5,13 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 
-@ConfigGroup("postiepete")
+@ConfigGroup(PostiePeteConfig.GROUP)
 public interface PostiePeteConfig extends Config
 {
+	String GROUP = "postiepete";
+
+	String SEND_LOOT_KEY = "sendLoot";
+
 	@ConfigSection(
 		name = "Loot",
 		description = "NPC drops, raid and reward chests, clue caskets etc.",
@@ -44,9 +48,9 @@ public interface PostiePeteConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "sendLoot",
+		keyName = SEND_LOOT_KEY,
 		name = "Send event",
-		description = "Send a loot event when you receive loot",
+		description = "Send a loot event when you receive loot. Needs RuneLite's Loot Tracker plugin turned on.",
 		section = lootSection,
 		position = 0
 	)

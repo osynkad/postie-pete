@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -14,12 +15,14 @@ import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
-import net.runelite.api.NPC;
+import net.runelite.api.GameState;
 import net.runelite.api.Player;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameStateChanged;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.events.NpcLootReceived;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
@@ -60,11 +63,19 @@ public class PostiePetePlugin extends Plugin
 	private static final Pattern COMBAT_ACHIEVEMENT_PATTERN = Pattern.compile(
 		"Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+?)(?: \\(\\d+ points?\\))?\\.?");
 
-	// The duration message arrives on the kill, the loot spawns after the death animation
+	// The duration message arrives on the kill, the game reports the loot around the same time
 	private static final int KILL_TIME_MAX_AGE_TICKS = 30;
 
 	// Reward chests are opened some time after the completion message, ~10 minutes
 	private static final int CHEST_TIME_MAX_AGE_TICKS = 1000;
+
+	// RuneLite keeps each plugin's on/off state in the "runelite" config group, under the plugin's class name in
+	// lower case. No value means the plugin's default, which for the Loot Tracker is on.
+	static final String RUNELITE_GROUP = "runelite";
+	static final String LOOT_TRACKER_KEY = "loottrackerplugin";
+
+	static final String LOOT_TRACKER_OFF_MESSAGE = "Postie Pete can't send loot while the Loot Tracker plugin is"
+		+ " turned off. Turn it on in RuneLite's plugin list.";
 
 	@Inject
 	private Client client;
@@ -81,17 +92,36 @@ public class PostiePetePlugin extends Plugin
 	@Inject
 	private ItemManager itemManager;
 
+	@Inject
+	private ConfigManager configManager;
+
+	@Inject
+	private ClientThread clientThread;
+
 	private Gson gson;
 
 	private Double lastKillTime;
 	private boolean lastKillTimePersonalBest;
 	private int lastKillTimeTick;
 
+	// Whether the Loot Tracker has been checked since logging in, so the warning shows once per login, not per hop
+	private boolean lootTrackerChecked;
+
 	@Override
 	protected void startUp() throws Exception
 	{
 		// serializeNulls so that optional fields (e.g. a loot event's duration) are always present, as null
 		gson = baseGson.newBuilder().serializeNulls().create();
+		// Turned on while already logged in: no login to wait for
+		lootTrackerChecked = false;
+		clientThread.invokeLater(() ->
+		{
+			if (client.getGameState() == GameState.LOGGED_IN)
+			{
+				lootTrackerChecked = true;
+				warnIfLootTrackerOff();
+			}
+		});
 		log.debug("Postie Pete started!");
 	}
 
@@ -102,38 +132,31 @@ public class PostiePetePlugin extends Plugin
 		log.debug("Postie Pete stopped!");
 	}
 
-	@Subscribe
-	public void onNpcLootReceived(NpcLootReceived event)
-	{
-		Player localPlayer = client.getLocalPlayer();
-		NPC npc = event.getNpc();
-		if (localPlayer == null || npc == null)
-		{
-			return;
-		}
-
-		// Consumed even when loot isn't sent, so it can't be attached to a later kill
-		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
-		if (!config.sendLoot())
-		{
-			return;
-		}
-
-		postEvent(new LootEvent(common(localPlayer), npc.getName(), npc.getId(), killTime,
-			killTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
-	}
-
 	/**
-	 * Fired by the Loot Tracker plugin. NPC loot is already handled by onNpcLootReceived,
-	 * so only non-NPC sources (reward chests, clue caskets etc.) are handled here. These are
-	 * sent as the same loot event with the Loot Tracker name (e.g. "Fractured Archive") as the
-	 * source, so the API can treat them the same way.
+	 * Fired by the Loot Tracker plugin, for NPC kills and for non-NPC sources (reward chests,
+	 * clue caskets etc.). Both are sent as the same loot event with the Loot Tracker name (e.g. "Vorkath",
+	 * "Fractured Archive") as the source, so the API can treat them the same way.
+	 *
+	 * NPC loot is the list the game itself reports for the kill, wherever the items end up. RuneLite's
+	 * NpcLootReceived only sees items that land under the dead NPC, so it misses bosses like the Mad Angel.
+	 * Pickpocket and player kill loot have their own types and are not sent.
 	 */
 	@Subscribe
 	public void onLootReceived(LootReceived event)
 	{
 		Player localPlayer = client.getLocalPlayer();
-		if (localPlayer == null || event.getType() != LootRecordType.EVENT)
+		if (localPlayer == null)
+		{
+			return;
+		}
+
+		if (event.getType() == LootRecordType.NPC)
+		{
+			onNpcLoot(localPlayer, event);
+			return;
+		}
+
+		if (event.getType() != LootRecordType.EVENT)
 		{
 			return;
 		}
@@ -146,6 +169,90 @@ public class PostiePetePlugin extends Plugin
 
 		postEvent(new LootEvent(common(localPlayer), event.getName(), null, completionTime,
 			completionTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
+	}
+
+	private void onNpcLoot(Player localPlayer, LootReceived event)
+	{
+		// Consumed even when loot isn't sent, so it can't be attached to a later kill
+		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		if (!config.sendLoot())
+		{
+			return;
+		}
+
+		postEvent(new LootEvent(common(localPlayer), event.getName(), npcId(event.getMetadata()), killTime,
+			killTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
+	}
+
+	/**
+	 * The Loot Tracker passes the NPC id as the metadata of NPC loot, except for a few NPCs where it
+	 * passes a map instead (Cave horror has the id under "id"). Anything else has no id.
+	 */
+	static Integer npcId(Object metadata)
+	{
+		if (metadata instanceof Integer)
+		{
+			return (Integer) metadata;
+		}
+		if (metadata instanceof Map && ((Map<?, ?>) metadata).get("id") instanceof Integer)
+		{
+			return (Integer) ((Map<?, ?>) metadata).get("id");
+		}
+		return null;
+	}
+
+	@Subscribe
+	public void onGameStateChanged(GameStateChanged event)
+	{
+		// The Loot Tracker warning shows once per login, so a hop doesn't repeat it
+		GameState state = event.getGameState();
+		if (state == GameState.LOGIN_SCREEN)
+		{
+			lootTrackerChecked = false;
+		}
+		else if (state == GameState.LOGGED_IN && !lootTrackerChecked)
+		{
+			lootTrackerChecked = true;
+			// Once the login's game state change has been handled, so the chatbox is ready
+			clientThread.invokeLater(this::warnIfLootTrackerOff);
+		}
+	}
+
+	/**
+	 * Warns straight away when the Loot Tracker is turned off, or loot sending is turned on while it is off.
+	 */
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		boolean lootTrackerChanged = RUNELITE_GROUP.equals(event.getGroup()) && LOOT_TRACKER_KEY.equals(event.getKey());
+		boolean sendLootChanged = PostiePeteConfig.GROUP.equals(event.getGroup())
+			&& PostiePeteConfig.SEND_LOOT_KEY.equals(event.getKey());
+		if (lootTrackerChanged || sendLootChanged)
+		{
+			clientThread.invokeLater(this::warnIfLootTrackerOff);
+		}
+	}
+
+	/**
+	 * Loot only reaches this plugin through the Loot Tracker's LootReceived event, so with the Loot Tracker
+	 * turned off nothing is sent. Tells the player in chat, if they are logged in and want loot sent.
+	 */
+	private void warnIfLootTrackerOff()
+	{
+		if (client.getGameState() != GameState.LOGGED_IN || !config.sendLoot()
+			|| isPluginOn(configManager.getConfiguration(RUNELITE_GROUP, LOOT_TRACKER_KEY)))
+		{
+			return;
+		}
+		client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", LOOT_TRACKER_OFF_MESSAGE, null);
+	}
+
+	/**
+	 * Reads a plugin's on/off config value: on unless it says "false". No value means on, the Loot Tracker's default.
+	 */
+	static boolean isPluginOn(String value)
+	{
+		return value == null || Boolean.parseBoolean(value);
 	}
 
 	@Subscribe

@@ -116,6 +116,6 @@ Some events depend on RuneLite or game settings:
 
 | Event | Requires |
 | --- | --- |
-| `loot` from chests, caskets and other non-NPC sources | RuneLite's **Loot Tracker** plugin enabled (on by default). NPC drops are sent either way. |
+| `loot` | RuneLite's **Loot Tracker** plugin enabled (on by default). The plugin warns in chat when it is turned off. |
 | `collection_log` | The in-game collection log notification set to show in chat. |
 | `duration` | Only bosses and activities where the game posts a duration or completion time in chat. Timers added by other plugins are not used. |
