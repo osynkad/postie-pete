@@ -93,6 +93,17 @@ public class PostieEventTest
 	}
 
 	@Test
+	public void killWithoutLootHasNoLootTrackerName()
+	{
+		LootEvent.Source source = LootEvent.Source.of(null, new LootEvent.Kill("TzKal-Zuk", 3), null,
+			new LootEvent.KillTime(3720.0, 3720.0, true));
+		assertEquals("TzKal-Zuk", source.getName());
+		assertEquals(true, source.isNewPersonalBest());
+		assertEquals(null, source.getLootName());
+		assertEquals(Integer.valueOf(3), source.getKillCount());
+	}
+
+	@Test
 	public void combatAchievementEventHasOnlyCombatAchievementFields()
 	{
 		JsonObject json = toJson(new CombatAchievementEvent(COMMON, "hard", "Noxious Foe", 402));

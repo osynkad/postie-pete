@@ -1,5 +1,6 @@
 package com.postiepete;
 
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.runelite.client.util.Text;
@@ -23,8 +24,15 @@ class KillCounts
 	// Raids say "Your completed <raid> count"; their kill count only goes with the reward chest
 	private static final String RAID_PREFIX = "completed ";
 
+	// Kills the game reports no loot for at the kill, so without this they would never be sent: the Fight Caves
+	// and the Inferno give their cape and Tokkul as a reward, and Wintertodt and Tempoross rewards are claimed
+	// separately (their reward loot isn't one per kill). Only these get a kill without loot: other kill count
+	// messages (agility laps, the Sepulchre, activities whose chest is opened later) would be noise or counted twice.
+	static final Set<String> KILLS_WITHOUT_LOOT = Set.of("TzKal-Zuk", "TzTok-Jad", "Wintertodt", "Tempoross");
+
 	private final int npcMaxAgeTicks;
 	private final int chestMaxAgeTicks;
+	private final int withoutLootTicks;
 
 	private LootEvent.Kill last;
 	private boolean lastIsRaid;
@@ -33,11 +41,14 @@ class KillCounts
 	/**
 	 * @param npcMaxAgeTicks   how long after the message NPC loot can still claim it
 	 * @param chestMaxAgeTicks how long after the message a reward chest can still claim it (chests are opened later)
+	 * @param withoutLootTicks how long after the message a kill in {@link #KILLS_WITHOUT_LOOT} waits for loot
+	 *                         before it counts as a kill without loot; loot comes on the message's own tick
 	 */
-	KillCounts(int npcMaxAgeTicks, int chestMaxAgeTicks)
+	KillCounts(int npcMaxAgeTicks, int chestMaxAgeTicks, int withoutLootTicks)
 	{
 		this.npcMaxAgeTicks = npcMaxAgeTicks;
 		this.chestMaxAgeTicks = chestMaxAgeTicks;
+		this.withoutLootTicks = withoutLootTicks;
 	}
 
 	/**
@@ -92,6 +103,20 @@ class KillCounts
 	{
 		if (last == null || chestName == null || tick - lastTick > chestMaxAgeTicks
 			|| !last.getName().toLowerCase().startsWith(chestName.toLowerCase()))
+		{
+			return null;
+		}
+		return consume();
+	}
+
+	/**
+	 * A kill in {@link #KILLS_WITHOUT_LOOT} that no loot claimed in time, to be sent as a kill without loot.
+	 * Consumed, so it is sent once. Call every tick.
+	 */
+	LootEvent.Kill takeKillWithoutLoot(int tick)
+	{
+		if (last == null || lastIsRaid || tick - lastTick <= withoutLootTicks
+			|| !KILLS_WITHOUT_LOOT.contains(last.getName()))
 		{
 			return null;
 		}

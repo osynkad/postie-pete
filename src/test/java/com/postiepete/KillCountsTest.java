@@ -8,8 +8,9 @@ public class KillCountsTest
 {
 	private static final int NPC_MAX_AGE = 30;
 	private static final int CHEST_MAX_AGE = 1000;
+	private static final int WITHOUT_LOOT = 10;
 
-	private final KillCounts killCounts = new KillCounts(NPC_MAX_AGE, CHEST_MAX_AGE);
+	private final KillCounts killCounts = new KillCounts(NPC_MAX_AGE, CHEST_MAX_AGE, WITHOUT_LOOT);
 
 	private static LootEvent.Kill kill(String name, int count)
 	{
@@ -92,5 +93,40 @@ public class KillCountsTest
 	{
 		killCounts.onMessage("Your completed Tombs of Amascut: Expert Mode count is: <col=ff0000>5</col>.", 100);
 		assertNull(killCounts.claimForChest("Tombs of Amascut", 101 + CHEST_MAX_AGE));
+	}
+
+	@Test
+	public void infernoWithoutLootBecomesAKillOnceItsWaitIsOver()
+	{
+		killCounts.onMessage("Your TzKal-Zuk kill count is: <col=ff0000>3</col>.", 100);
+		assertNull(killCounts.takeKillWithoutLoot(100 + WITHOUT_LOOT));
+		assertEquals(kill("TzKal-Zuk", 3), killCounts.takeKillWithoutLoot(101 + WITHOUT_LOOT));
+		assertNull(killCounts.takeKillWithoutLoot(102 + WITHOUT_LOOT));
+	}
+
+	@Test
+	public void killWithLootIsNotAlsoAKillWithoutLoot()
+	{
+		killCounts.onMessage("Your TzKal-Zuk kill count is: <col=ff0000>3</col>.", 100);
+		assertEquals(kill("TzKal-Zuk", 3), killCounts.claimForNpcLoot(100));
+		assertNull(killCounts.takeKillWithoutLoot(200));
+	}
+
+	@Test
+	public void otherKillCountsAreNeverKillsWithoutLoot()
+	{
+		killCounts.onMessage("Your Vorkath kill count is: <col=ff0000>500</col>.", 100);
+		assertNull(killCounts.takeKillWithoutLoot(200));
+		killCounts.onMessage("Your Ardougne Rooftop lap count is: <col=ff0000>12</col>.", 300);
+		assertNull(killCounts.takeKillWithoutLoot(400));
+		killCounts.onMessage("Your Sol Heredit kill count is: <col=ff0000>2</col>.", 500);
+		assertNull(killCounts.takeKillWithoutLoot(600));
+	}
+
+	@Test
+	public void wintertodtIsAKillWithoutLoot()
+	{
+		killCounts.onMessage("Your subdued Wintertodt count is: <col=ff0000>1,234</col>.", 100);
+		assertEquals(kill("Wintertodt", 1234), killCounts.takeKillWithoutLoot(200));
 	}
 }
