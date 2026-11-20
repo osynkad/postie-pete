@@ -19,6 +19,9 @@ import net.runelite.api.GameState;
 import net.runelite.api.Player;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
+import net.runelite.api.events.VarbitChanged;
+import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -54,10 +57,6 @@ public class PostiePetePlugin extends Plugin
 		"(?i)(?:(?:Fight |Lap |Challenge |Corrupted challenge )?duration:|Subdued in|(?<!total )completion time:"
 			+ "|The Fractured Archive: Total completion time:) "
 			+ "(?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)</col>(?<newpb> \\(new personal best\\))?");
-
-	// "New item added to your collection log: Abyssal whip" (requires the in-game collection log chat notification)
-	private static final Pattern COLLECTION_LOG_PATTERN = Pattern.compile(
-		"New item added to your collection log: (?<item>.+)");
 
 	// "Congratulations, you've completed a hard combat task: Task Name (3 points)."
 	private static final Pattern COMBAT_ACHIEVEMENT_PATTERN = Pattern.compile(
@@ -104,6 +103,12 @@ public class PostiePetePlugin extends Plugin
 	private boolean lastKillTimePersonalBest;
 	private int lastKillTimeTick;
 
+	// The collection log overview's "most recent item" varp is set to the item ID of each new
+	// collection log item. On login the game sends the existing value too, so changes are only
+	// treated as new items once the player is fully logged in and a baseline has been taken.
+	private boolean collectionLogReady;
+	private int lastCollectionLogItemId;
+
 	// Whether the Loot Tracker has been checked since logging in, so the warning shows once per login, not per hop
 	private boolean lootTrackerChecked;
 
@@ -129,6 +134,8 @@ public class PostiePetePlugin extends Plugin
 	protected void shutDown() throws Exception
 	{
 		lastKillTime = null;
+		collectionLogReady = false;
+		lastCollectionLogItemId = 0;
 		log.debug("Postie Pete stopped!");
 	}
 
@@ -204,8 +211,14 @@ public class PostiePetePlugin extends Plugin
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
 	{
-		// The Loot Tracker warning shows once per login, so a hop doesn't repeat it
+		// LOGGED_IN also follows every loading screen, so only a real logout or hop resets this
 		GameState state = event.getGameState();
+		if (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING || state == GameState.CONNECTION_LOST)
+		{
+			collectionLogReady = false;
+		}
+
+		// The Loot Tracker warning shows once per login, so a hop doesn't repeat it
 		if (state == GameState.LOGIN_SCREEN)
 		{
 			lootTrackerChecked = false;
@@ -216,6 +229,51 @@ public class PostiePetePlugin extends Plugin
 			// Once the login's game state change has been handled, so the chatbox is ready
 			clientThread.invokeLater(this::warnIfLootTrackerOff);
 		}
+	}
+
+	/**
+	 * Takes the collection log baseline on the first tick after logging in (or after the plugin is
+	 * enabled mid-session), by which point the game has sent the existing value.
+	 */
+	@Subscribe
+	public void onGameTick(GameTick event)
+	{
+		if (!collectionLogReady && client.getGameState() == GameState.LOGGED_IN)
+		{
+			lastCollectionLogItemId = client.getVarpValue(VarPlayerID.COLLECTION_OVERVIEW_LAST_ITEM0);
+			collectionLogReady = true;
+			log.debug("Collection log baseline: {}", lastCollectionLogItemId);
+		}
+	}
+
+	@Subscribe
+	public void onVarbitChanged(VarbitChanged event)
+	{
+		if (event.getVarpId() != VarPlayerID.COLLECTION_OVERVIEW_LAST_ITEM0 || event.getVarbitId() != -1)
+		{
+			return;
+		}
+
+		int itemId = event.getValue();
+		if (!collectionLogReady)
+		{
+			log.debug("Ignoring collection log varp change to {} during login", itemId);
+			return;
+		}
+		if (itemId <= 0 || itemId == lastCollectionLogItemId)
+		{
+			return;
+		}
+		lastCollectionLogItemId = itemId;
+
+		Player localPlayer = client.getLocalPlayer();
+		if (localPlayer == null || !config.sendCollectionLog())
+		{
+			return;
+		}
+
+		String itemName = itemManager.getItemComposition(itemId).getName();
+		postEvent(new CollectionLogEvent(common(localPlayer), itemName, itemId));
 	}
 
 	/**
@@ -279,17 +337,6 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		String message = Text.removeTags(event.getMessage());
-
-		matcher = COLLECTION_LOG_PATTERN.matcher(message);
-		if (matcher.matches())
-		{
-			if (config.sendCollectionLog())
-			{
-				postEvent(new CollectionLogEvent(common(localPlayer), matcher.group("item")));
-			}
-			return;
-		}
-
 		matcher = COMBAT_ACHIEVEMENT_PATTERN.matcher(message);
 		if (matcher.matches() && config.sendCombatAchievement())
 		{

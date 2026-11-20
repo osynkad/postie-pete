@@ -78,7 +78,8 @@ New event types and new fields may be added in later versions. Ignore event type
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `itemName` | string | The collection log item name, e.g. `"Abyssal whip"`. The name only, no item ID. |
+| `itemName` | string | The item's name, e.g. `"Abyssal whip"`. Not unique: several collection log items share a name (e.g. the chompy bird hats, Castle Wars items), so use `itemId` to tell them apart. |
+| `itemId` | number | The exact item ID of the new collection log item, as the game records it. |
 
 ```json
 {
@@ -86,7 +87,8 @@ New event types and new fields may be added in later versions. Ignore event type
   "timestamp": "2026-11-12T20:35:00Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
-  "itemName": "Vorkath's head"
+  "itemName": "Vorkath's head",
+  "itemId": 21907
 }
 ```
 
@@ -117,5 +119,4 @@ Some events depend on RuneLite or game settings:
 | Event | Requires |
 | --- | --- |
 | `loot` | RuneLite's **Loot Tracker** plugin enabled (on by default). The plugin warns in chat when it is turned off. |
-| `collection_log` | The in-game collection log notification set to show in chat. |
 | `duration` | Only bosses and activities where the game posts a duration or completion time in chat. Timers added by other plugins are not used. |

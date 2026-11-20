@@ -46,11 +46,12 @@ public class PostieEventTest
 	@Test
 	public void collectionLogEventHasOnlyCollectionLogFields()
 	{
-		JsonObject json = toJson(new CollectionLogEvent(COMMON, "Vorkath's head"));
+		JsonObject json = toJson(new CollectionLogEvent(COMMON, "Vorkath's head", 21907));
 
-		assertEquals(with(COMMON_FIELDS, "itemName"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "itemName", "itemId"), json.keySet());
 		assertEquals("collection_log", json.get("eventType").getAsString());
 		assertEquals("Vorkath's head", json.get("itemName").getAsString());
+		assertEquals(21907, json.get("itemId").getAsInt());
 	}
 
 	@Test
