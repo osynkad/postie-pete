@@ -38,8 +38,8 @@ public interface PostiePeteConfig extends Config
 
 	@ConfigItem(
 		keyName = "endpointUrl",
-		name = "Endpoint URL",
-		description = "Full URL that events are POSTed to, e.g. http://localhost:3000/events",
+		name = "Endpoint URLs",
+		description = "Full URLs that events are POSTed to, separated by commas, e.g. http://localhost:3000/events",
 		position = 0
 	)
 	default String endpointUrl()

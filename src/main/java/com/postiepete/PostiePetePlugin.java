@@ -5,10 +5,13 @@ import com.google.inject.Provides;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -606,24 +609,57 @@ public class PostiePetePlugin extends Plugin
 		return hash == -1 ? null : Long.toString(hash);
 	}
 
+	/**
+	 * The endpoint URLs from the comma-separated setting, in order and without duplicates. Blank entries are
+	 * skipped, and invalid ones are logged and skipped.
+	 */
+	static List<HttpUrl> endpointUrls(String setting)
+	{
+		if (setting == null)
+		{
+			return Collections.emptyList();
+		}
+
+		Set<HttpUrl> urls = new LinkedHashSet<>();
+		for (String part : setting.split(","))
+		{
+			String trimmed = part.trim();
+			if (trimmed.isEmpty())
+			{
+				continue;
+			}
+
+			HttpUrl url = HttpUrl.parse(trimmed);
+			if (url == null)
+			{
+				log.debug("Invalid endpoint URL: {}", trimmed);
+				continue;
+			}
+			urls.add(url);
+		}
+		return new ArrayList<>(urls);
+	}
+
 	private void postEvent(PostieEvent event)
 	{
-		String endpointUrl = config.endpointUrl();
-		if (endpointUrl == null || endpointUrl.trim().isEmpty())
+		List<HttpUrl> urls = endpointUrls(config.endpointUrl());
+		if (urls.isEmpty())
 		{
 			return;
 		}
 
-		HttpUrl url = HttpUrl.parse(endpointUrl.trim());
-		if (url == null)
+		String json = gson.toJson(event);
+		for (HttpUrl url : urls)
 		{
-			log.debug("Invalid endpoint URL: {}", endpointUrl);
-			return;
+			post(url, json);
 		}
+	}
 
+	private void post(HttpUrl url, String json)
+	{
 		Request request = new Request.Builder()
 			.url(url)
-			.post(RequestBody.create(JSON, gson.toJson(event)))
+			.post(RequestBody.create(JSON, json))
 			.build();
 
 		okHttpClient.newCall(request).enqueue(new Callback()

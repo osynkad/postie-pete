@@ -6,9 +6,9 @@ Postie Pete only gathers events. It does not store, display or analyse anything.
 
 ## Setup
 
-Set **Endpoint URL** in the plugin settings to the full URL that events should be POSTed to, for example `http://localhost:3000/events`. While it is empty, nothing is sent.
+Set **Endpoint URLs** in the plugin settings to the full URL that events should be POSTed to, for example `http://localhost:3000/events`. To send events to more than one API, separate the URLs with commas, for example `http://localhost:3000/events, https://example.com/osrs`. While it is empty, nothing is sent.
 
-Every event is sent as:
+Every event is sent to each URL as:
 
 ```http
 POST {Endpoint URL}
@@ -21,7 +21,7 @@ Any `2xx` response counts as success. Failed requests are not retried.
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| **Endpoint URL** | empty | Full URL that events are POSTed to. Nothing is sent while it is empty. |
+| **Endpoint URLs** | empty | Full URLs that events are POSTed to, separated by commas. Nothing is sent while it is empty. |
 | **Loot** › **Send event** | on | Send `loot` events. |
 | **Collection log** › **Send event** | on | Send `collection_log` events. |
 | **Combat achievements** › **Send event** | on | Send `combat_achievement` events. |
