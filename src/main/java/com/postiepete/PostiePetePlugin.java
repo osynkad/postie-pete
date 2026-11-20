@@ -53,10 +53,12 @@ public class PostiePetePlugin extends Plugin
 
 	// Matches boss kill duration messages, e.g. "Fight duration: <col=ff0000>1:23.40</col>. Personal best: 1:20.00"
 	// or "Fight duration: <col=ff0000>1:19.80</col> (new personal best)". Same formats as RuneLite's chat commands plugin.
-	private static final Pattern KILL_DURATION_PATTERN = Pattern.compile(
+	// The personal best time can be coloured too.
+	static final Pattern KILL_DURATION_PATTERN = Pattern.compile(
 		"(?i)(?:(?:Fight |Lap |Challenge |Corrupted challenge )?duration:|Subdued in|(?<!total )completion time:"
 			+ "|The Fractured Archive: Total completion time:) "
-			+ "(?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)</col>(?<newpb> \\(new personal best\\))?");
+			+ "(?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)</col>(?:(?<newpb> \\(new personal best\\))"
+			+ "|\\.? ?Personal best: (?:</col>)?(?:<col=[0-9a-f]{6}>|@.+?@)?(?<pb>[0-9:]+(?:\\.[0-9]+)?))?");
 
 	// "CA_ID:648|Congratulations, you've completed a hard combat task: @ach_comp@Task Name (3 points).", tags removed.
 	// The game puts the task id in front of the message and colours the task name with an @...@ code, which
@@ -102,9 +104,10 @@ public class PostiePetePlugin extends Plugin
 
 	private Gson gson;
 
-	private Double lastKillTime;
-	private boolean lastKillTimePersonalBest;
+	private LootEvent.KillTime lastKillTime;
 	private int lastKillTimeTick;
+
+	private final KillCounts killCounts = new KillCounts(KILL_TIME_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS);
 
 	// The collection log overview's "most recent item" varp is set to the item ID of each new
 	// collection log item. On login the game sends the existing value too, so changes are only
@@ -137,6 +140,7 @@ public class PostiePetePlugin extends Plugin
 	protected void shutDown() throws Exception
 	{
 		lastKillTime = null;
+		killCounts.reset();
 		collectionLogReady = false;
 		lastCollectionLogItemId = 0;
 		log.debug("Postie Pete stopped!");
@@ -144,8 +148,8 @@ public class PostiePetePlugin extends Plugin
 
 	/**
 	 * Fired by the Loot Tracker plugin, for NPC kills and for non-NPC sources (reward chests,
-	 * clue caskets etc.). Both are sent as the same loot event with the Loot Tracker name (e.g. "Vorkath",
-	 * "Fractured Archive") as the source, so the API can treat them the same way.
+	 * clue caskets etc.). Both are sent as the same loot event, so the API can treat them the same way. The
+	 * source is named by the kill count message that came with the loot, or else by the Loot Tracker.
 	 *
 	 * NPC loot is the list the game itself reports for the kill, wherever the items end up. RuneLite's
 	 * NpcLootReceived only sees items that land under the dead NPC, so it misses bosses like the Mad Angel.
@@ -171,27 +175,31 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		Double completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
+		LootEvent.KillTime completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
+		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), client.getTickCount());
 		if (!config.sendLoot())
 		{
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), event.getName(), null, completionTime,
-			completionTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
+		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(event.getName(), kill, null, completionTime),
+			toDrops(event.getItems())));
 	}
 
 	private void onNpcLoot(Player localPlayer, LootReceived event)
 	{
 		// Consumed even when loot isn't sent, so it can't be attached to a later kill
-		Double killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		LootEvent.KillTime killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		LootEvent.Kill kill = killCounts.claimForNpcLoot(client.getTickCount());
+		log.debug("NPC loot: {} (tick {}), kill count {}", event.getName(), client.getTickCount(), kill);
 		if (!config.sendLoot())
 		{
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), event.getName(), npcId(event.getMetadata()), killTime,
-			killTime != null && lastKillTimePersonalBest, toDrops(event.getItems())));
+		postEvent(new LootEvent(common(localPlayer),
+			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime),
+			toDrops(event.getItems())));
 	}
 
 	/**
@@ -324,12 +332,19 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		int tick = client.getTickCount();
 		Matcher matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
 		if (matcher.find())
 		{
-			lastKillTime = parseDuration(matcher.group("time"));
-			lastKillTimePersonalBest = matcher.group("newpb") != null;
-			lastKillTimeTick = client.getTickCount();
+			lastKillTime = parseKillTime(matcher);
+			lastKillTimeTick = tick;
+			return;
+		}
+
+		LootEvent.Kill killCount = killCounts.onMessage(event.getMessage(), tick);
+		if (killCount != null)
+		{
+			log.debug("Kill count: {} {} (tick {})", killCount.getName(), killCount.getCount(), tick);
 			return;
 		}
 
@@ -364,15 +379,36 @@ public class PostiePetePlugin extends Plugin
 	 * Returns the last reported duration if it is recent enough, and consumes it so it
 	 * can't be attached to a later, unrelated event.
 	 */
-	private Double consumeKillTime(int maxAgeTicks)
+	private LootEvent.KillTime consumeKillTime(int maxAgeTicks)
 	{
-		Double killTime = null;
+		LootEvent.KillTime killTime = null;
 		if (lastKillTime != null && client.getTickCount() - lastKillTimeTick <= maxAgeTicks)
 		{
 			killTime = lastKillTime;
 		}
 		lastKillTime = null;
 		return killTime;
+	}
+
+	/**
+	 * The duration and personal best of a {@link #KILL_DURATION_PATTERN} match: the duration itself for a new
+	 * personal best, the "Personal best:" time if the message shows one, otherwise none. newPersonalBest is set
+	 * only for "(new personal best)", so a time that ties the personal best is not a new one.
+	 */
+	static LootEvent.KillTime parseKillTime(Matcher matcher)
+	{
+		double duration = parseDuration(matcher.group("time"));
+		boolean newPersonalBest = matcher.group("newpb") != null;
+		Double personalBest = null;
+		if (newPersonalBest)
+		{
+			personalBest = duration;
+		}
+		else if (matcher.group("pb") != null)
+		{
+			personalBest = parseDuration(matcher.group("pb"));
+		}
+		return new LootEvent.KillTime(duration, personalBest, newPersonalBest);
 	}
 
 	/**

@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import org.junit.Test;
 
@@ -19,29 +20,35 @@ public class PostieEventTest
 
 	private static final Set<String> COMMON_FIELDS = set("eventType", "timestamp", "rsn", "accountHash");
 
+	private static final List<String> SOURCE_FIELDS = Arrays.asList(
+		"name", "lootName", "npcId", "killCount", "duration", "personalBest", "newPersonalBest");
+
 	@Test
 	public void lootEventHasOnlyLootFields()
 	{
-		JsonObject json = toJson(new LootEvent(COMMON, "Vorkath", 8061, null, false,
+		JsonObject json = toJson(new LootEvent(COMMON,
+			LootEvent.Source.of("Mad Angel", new LootEvent.Kill("Mad Angel", 212), 16305,
+				new LootEvent.KillTime(48.6, 41.2, false)),
 			Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450))));
 
-		assertEquals(with(COMMON_FIELDS, "source", "npcId", "duration", "personalBest", "drops"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "source", "drops"), json.keySet());
 		assertEquals("loot", json.get("eventType").getAsString());
 		assertEquals("ExamplePlayer", json.get("rsn").getAsString());
-		assertEquals(8061, json.get("npcId").getAsInt());
-		assertEquals(true, json.get("duration").isJsonNull());
+		JsonObject source = json.getAsJsonObject("source");
+		assertEquals(new HashSet<>(SOURCE_FIELDS), source.keySet());
+		assertEquals("Mad Angel", source.get("name").getAsString());
+		// Same name in the kill count message and the Loot Tracker
+		assertEquals(true, source.get("lootName").isJsonNull());
+		assertEquals(16305, source.get("npcId").getAsInt());
+		assertEquals(212, source.get("killCount").getAsInt());
+		assertEquals(48.6, source.get("duration").getAsDouble(), 0);
+		assertEquals(41.2, source.get("personalBest").getAsDouble(), 0);
+		assertEquals(false, source.get("newPersonalBest").getAsBoolean());
 		JsonObject drop = json.getAsJsonArray("drops").get(0).getAsJsonObject();
 		assertEquals(set("itemId", "itemName", "quantity", "value"), drop.keySet());
 		assertEquals(536, drop.get("itemId").getAsInt());
 		assertEquals("Dragon bones", drop.get("itemName").getAsString());
 		assertEquals(2450, drop.get("value").getAsLong());
-	}
-
-	@Test
-	public void nonNpcLootSendsNullNpcId()
-	{
-		JsonObject loot = toJson(new LootEvent(COMMON, "Barrows", null, null, false, Collections.emptyList()));
-		assertEquals(true, loot.get("npcId").isJsonNull());
 	}
 
 	@Test
@@ -53,6 +60,36 @@ public class PostieEventTest
 		assertEquals("collection_log", json.get("eventType").getAsString());
 		assertEquals("Vorkath's head", json.get("itemName").getAsString());
 		assertEquals(21907, json.get("itemId").getAsInt());
+	}
+
+	@Test
+	public void lootWithoutKillCountIsNamedByTheLootTracker()
+	{
+		LootEvent.Source source = LootEvent.Source.of("Reward cart (Wintertodt)", null, null, null);
+		assertEquals("Reward cart (Wintertodt)", source.getName());
+		assertEquals(null, source.getLootName());
+		assertEquals(null, source.getNpcId());
+		assertEquals(null, source.getKillCount());
+		assertEquals(null, source.getDuration());
+		assertEquals(null, source.getPersonalBest());
+		assertEquals(false, source.isNewPersonalBest());
+	}
+
+	@Test
+	public void lootIsNamedByItsKillCountMessageAndKeepsADifferentLootTrackerName()
+	{
+		LootEvent.Source source = LootEvent.Source.of("Theatre of Blood", new LootEvent.Kill("Theatre of Blood: Hard Mode", 40),
+			null, new LootEvent.KillTime(1234.5, null, false));
+		assertEquals("Theatre of Blood: Hard Mode", source.getName());
+		assertEquals("Theatre of Blood", source.getLootName());
+		assertEquals(Integer.valueOf(40), source.getKillCount());
+		assertEquals(Double.valueOf(1234.5), source.getDuration());
+		assertEquals(null, source.getPersonalBest());
+
+		JsonObject json = GSON.toJsonTree(source).getAsJsonObject();
+		assertEquals("The Leviathan", LootEvent.Source.of("The Leviathan", new LootEvent.Kill("Leviathan", 120),
+			12214, null).getLootName());
+		assertEquals(new HashSet<>(SOURCE_FIELDS), json.keySet());
 	}
 
 	@Test
