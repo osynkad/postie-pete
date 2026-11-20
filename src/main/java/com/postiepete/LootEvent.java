@@ -12,12 +12,18 @@ class LootEvent extends PostieEvent
 	 * What the loot came from: its name, kill count, kill time and personal best, and whether it was a new one.
 	 */
 	final Source source;
+
+	/**
+	 * Boss times for raid reward chests (currently the Fractured Archive). Null otherwise.
+	 */
+	final Raid raid;
 	final List<Drop> drops;
 
-	LootEvent(Common common, Source source, List<Drop> drops)
+	LootEvent(Common common, Source source, Raid raid, List<Drop> drops)
 	{
 		super(LOOT, common);
 		this.source = source;
+		this.raid = raid;
 		this.drops = drops;
 	}
 
@@ -122,6 +128,31 @@ class LootEvent extends PostieEvent
 		 * True when the message said "(new personal best)".
 		 */
 		boolean newPersonalBest;
+	}
+
+	@Value
+	static class Raid
+	{
+		/**
+		 * Each boss's duration, in the order fought, e.g. Archive Guardian, Bork, Moia, Xarth, Ocellus. The
+		 * Fractured Archive's path (the boss picked at each choice) is the 2nd to 4th boss. Empty if none were
+		 * seen (e.g. the plugin was enabled mid-raid).
+		 */
+		List<Split> splits;
+	}
+
+	@Value
+	static class Split
+	{
+		/**
+		 * Boss name as the game writes it in its completion message, e.g. "Bork".
+		 */
+		String boss;
+
+		/**
+		 * The boss's duration in seconds, e.g. 141.0.
+		 */
+		double duration;
 	}
 
 	@Value

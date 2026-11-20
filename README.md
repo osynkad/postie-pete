@@ -52,6 +52,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | Field | Type | Description |
 | --- | --- | --- |
 | `source` | object | What the loot came from: see [Source](#source). |
+| `raid` | object \| null | Raid reward chests only (currently the Fractured Archive): see [Raid](#raid). `null` for all other loot. |
 | `drops` | array | The loot received, as a list of `{ "itemId": number, "itemName": string, "quantity": number, "value": number }`. `itemName` comes from the game's item data and isn't unique, so use `itemId` as the key. `value` is the GE value of **one** item when the drop happened, from the OSRS Wiki real-time prices that RuneLite loads (regardless of the player's "Use wiki item prices" setting). Multiply by `quantity` for the stack value. Untradeable variants that RuneLite maps to a tradeable item (e.g. Sanguine Torva → Torva, noted → unnoted) get that item's value. Other untradeable items are `0`, as is any item if RuneLite hasn't loaded prices yet. Coins are `1` and platinum tokens `1000`. |
 
 #### Source
@@ -71,6 +72,12 @@ For Fortis Colosseum and Doom of Mokhaiotl, `duration` is only set for a full ru
 
 A few kills come with no loot at the kill: the **Inferno** and the **Fight Caves** (their cape and Tokkul are a reward, not a drop), and **Wintertodt** and **Tempoross** (rewards are claimed separately and aren't one per kill). When no loot comes with their kill count message, they are still sent as a `loot` event with the kill count's name as `name` (e.g. `"TzKal-Zuk"`, `"Wintertodt"`), `lootName: null`, `npcId: null`, the kill's `killCount` and `duration`, and an empty `drops` list.
 
+#### Raid
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `splits` | array | Each boss's time in the order fought, as `{ "boss": string, "duration": number }` with the boss as the game names it (e.g. `"Bork"`) and seconds. For the Fractured Archive the 2nd to 4th boss are the path picked. Empty when none were seen (e.g. the plugin was turned on mid-raid). |
+
 ```json
 {
   "eventType": "loot",
@@ -87,9 +94,43 @@ A few kills come with no loot at the kill: the **Inferno** and the **Fight Caves
     "newPersonalBest": false,
     "wave": null
   },
+  "raid": null,
   "drops": [
     { "itemId": 536, "itemName": "Dragon bones", "quantity": 2, "value": 2450 },
     { "itemId": 995, "itemName": "Coins", "quantity": 15000, "value": 1 }
+  ]
+}
+```
+
+A Fractured Archive chest:
+
+```json
+{
+  "eventType": "loot",
+  "timestamp": "2026-11-17T19:05:44Z",
+  "rsn": "ExamplePlayer",
+  "accountHash": "-3412345678901234567",
+  "source": {
+    "name": "Fractured Archive",
+    "lootName": null,
+    "npcId": null,
+    "killCount": 75,
+    "duration": 1085.8,
+    "personalBest": 1025.2,
+    "newPersonalBest": false,
+    "wave": null
+  },
+  "raid": {
+    "splits": [
+      { "boss": "Archive Guardian", "duration": 95.4 },
+      { "boss": "Bork", "duration": 141.0 },
+      { "boss": "Moia", "duration": 163.2 },
+      { "boss": "Xarth", "duration": 152.7 },
+      { "boss": "Ocellus", "duration": 210.5 }
+    ]
+  },
+  "drops": [
+    { "itemId": 995, "itemName": "Coins", "quantity": 50000, "value": 1 }
   ]
 }
 ```

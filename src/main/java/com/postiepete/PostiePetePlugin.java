@@ -78,6 +78,10 @@ public class PostiePetePlugin extends Plugin
 	private static final Pattern DOOM_TOTAL_DURATION_PATTERN = Pattern.compile(
 		"Total duration: (?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)");
 
+	// "Challenge complete: Bork. Duration: <col=ef1020>2:21.00</col>. Total: ...", tags removed (Fractured Archive)
+	private static final Pattern TFA_BOSS_COMPLETE_PATTERN = Pattern.compile(
+		"Challenge complete: (?<boss>.+?)\\. Duration: (?<time>[0-9:]+(?:\\.[0-9]+)?)");
+
 	private static final String COLOSSEUM = "Fortis Colosseum";
 	private static final String DOOM_OF_MOKHAIOTL = "Doom of Mokhaiotl";
 
@@ -133,6 +137,8 @@ public class PostiePetePlugin extends Plugin
 	private Integer lastDoomLevel;
 	private Double doomFullRunDuration;
 
+	private final FracturedArchive fracturedArchive = new FracturedArchive();
+
 	private final KillCounts killCounts = new KillCounts(KILL_TIME_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS,
 		KILL_WITHOUT_LOOT_TICKS);
 
@@ -170,6 +176,7 @@ public class PostiePetePlugin extends Plugin
 		lastColosseumWave = null;
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
+		fracturedArchive.reset();
 		killCounts.reset();
 		collectionLogReady = false;
 		lastCollectionLogItemId = 0;
@@ -208,6 +215,7 @@ public class PostiePetePlugin extends Plugin
 		LootEvent.KillTime completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
 		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), client.getTickCount());
 		Integer wave = null;
+		LootEvent.Raid raid = null;
 
 		// Loot can be claimed after any wave / delve level. Send how far the run got, and a duration
 		// only for a full run. The game only reports per-wave / per-level personal bests, so no personal
@@ -225,6 +233,10 @@ public class PostiePetePlugin extends Plugin
 			wave = event.getMetadata() instanceof Integer ? (Integer) event.getMetadata() : null;
 			completionTime = wave != null && wave >= DOOM_FULL_RUN_LEVELS ? withoutPersonalBest(doomFullRunDuration) : null;
 		}
+		else if (FracturedArchive.LOOT_SOURCE.equals(event.getName()))
+		{
+			raid = fracturedArchive.consumeRaid();
+		}
 		lastColosseumWave = null;
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
@@ -235,7 +247,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(event.getName(), kill, null, completionTime, wave),
-			toDrops(event.getItems())));
+			raid, toDrops(event.getItems())));
 	}
 
 	private void onNpcLoot(Player localPlayer, LootReceived event)
@@ -251,7 +263,7 @@ public class PostiePetePlugin extends Plugin
 
 		postEvent(new LootEvent(common(localPlayer),
 			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null),
-			toDrops(event.getItems())));
+			null, toDrops(event.getItems())));
 	}
 
 	/**
@@ -331,7 +343,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(null, kill, null, killTime, null),
-			Collections.emptyList()));
+			null, Collections.emptyList()));
 	}
 
 	@Subscribe
@@ -438,6 +450,23 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		String message = Text.removeTags(event.getMessage());
+
+		if (message.equals(FracturedArchive.RUN_START_MESSAGE))
+		{
+			fracturedArchive.onRunStarted();
+			return;
+		}
+
+		// Checked before KILL_DURATION_PATTERN, which also matches these. A boss's duration
+		// isn't a kill time: the raid's loot gets the total completion time.
+		matcher = TFA_BOSS_COMPLETE_PATTERN.matcher(message);
+		if (matcher.lookingAt())
+		{
+			fracturedArchive.onBossCompleted(matcher.group("boss"), parseDuration(matcher.group("time")));
+			return;
+		}
+
 		int tick = client.getTickCount();
 		matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
 		if (matcher.find())
@@ -447,11 +476,11 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		// Not returned: the Fractured Archive's completion message below is also a kill count message
 		LootEvent.Kill killCount = killCounts.onMessage(event.getMessage(), tick);
 		if (killCount != null)
 		{
 			log.debug("Kill count: {} {} (tick {})", killCount.getName(), killCount.getCount(), tick);
-			return;
 		}
 
 		Player localPlayer = client.getLocalPlayer();
@@ -460,7 +489,13 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		String message = Text.removeTags(event.getMessage());
+		// Keep the run's splits for the chest, which is opened later
+		if (message.startsWith(FracturedArchive.COMPLETION_MESSAGE))
+		{
+			fracturedArchive.onRaidCompleted();
+			return;
+		}
+
 		matcher = COMBAT_ACHIEVEMENT_PATTERN.matcher(message);
 		if (matcher.matches() && config.sendCombatAchievement())
 		{

@@ -29,9 +29,9 @@ public class PostieEventTest
 		JsonObject json = toJson(new LootEvent(COMMON,
 			LootEvent.Source.of("Mad Angel", new LootEvent.Kill("Mad Angel", 212), 16305,
 				new LootEvent.KillTime(48.6, 41.2, false), null),
-			Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450))));
+			null, Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450))));
 
-		assertEquals(with(COMMON_FIELDS, "source", "drops"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "source", "raid", "drops"), json.keySet());
 		assertEquals("loot", json.get("eventType").getAsString());
 		assertEquals("ExamplePlayer", json.get("rsn").getAsString());
 		JsonObject source = json.getAsJsonObject("source");
@@ -45,11 +45,30 @@ public class PostieEventTest
 		assertEquals(41.2, source.get("personalBest").getAsDouble(), 0);
 		assertEquals(false, source.get("newPersonalBest").getAsBoolean());
 		assertEquals(true, source.get("wave").isJsonNull());
+		assertEquals(true, json.get("raid").isJsonNull());
 		JsonObject drop = json.getAsJsonArray("drops").get(0).getAsJsonObject();
 		assertEquals(set("itemId", "itemName", "quantity", "value"), drop.keySet());
 		assertEquals(536, drop.get("itemId").getAsInt());
 		assertEquals("Dragon bones", drop.get("itemName").getAsString());
 		assertEquals(2450, drop.get("value").getAsLong());
+	}
+
+	@Test
+	public void raidLootSendsRaidDetails()
+	{
+		LootEvent.Raid raid = new LootEvent.Raid(
+			Arrays.asList(new LootEvent.Split("Archive Guardian", 123.0), new LootEvent.Split("Ezekiel", 141.6)));
+		JsonObject json = toJson(new LootEvent(COMMON,
+			LootEvent.Source.of("Fractured Archive", new LootEvent.Kill("Fractured Archive", 75), null,
+				new LootEvent.KillTime(1534.2, 1534.2, true), null),
+			raid, Collections.emptyList()));
+
+		JsonObject raidJson = json.getAsJsonObject("raid");
+		assertEquals(set("splits"), raidJson.keySet());
+		JsonObject split = raidJson.getAsJsonArray("splits").get(1).getAsJsonObject();
+		assertEquals(set("boss", "duration"), split.keySet());
+		assertEquals("Ezekiel", split.get("boss").getAsString());
+		assertEquals(141.6, split.get("duration").getAsDouble(), 0);
 	}
 
 	@Test
