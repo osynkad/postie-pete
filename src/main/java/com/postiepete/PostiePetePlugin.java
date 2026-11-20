@@ -68,6 +68,23 @@ public class PostiePetePlugin extends Plugin
 		"(?:CA_ID:(?<id>\\d+)\\|)?Congratulations, you've completed an? (?<tier>\\w+) combat task: (?:@\\w+@)?(?<task>.+?)"
 			+ "(?: \\(\\d+ points?\\))?\\.?");
 
+	// "Wave 2 completed! Wave duration: @mes_hl_red@1:09.60</col>"
+	private static final Pattern COLOSSEUM_WAVE_PATTERN = Pattern.compile("Wave (?<wave>\\d+) completed!");
+
+	// "Delve level: 2 duration: @mes_hl_red@1:19.80</col>. Personal best: ..." (Doom of Mokhaiotl)
+	private static final Pattern DOOM_LEVEL_PATTERN = Pattern.compile("Delve level: (?<level>\\d+)\\+? duration:");
+
+	// "Total duration: @mes_hl_red@2:03.00</col>", sent right after the delve level duration
+	private static final Pattern DOOM_TOTAL_DURATION_PATTERN = Pattern.compile(
+		"Total duration: (?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)");
+
+	private static final String COLOSSEUM = "Fortis Colosseum";
+	private static final String DOOM_OF_MOKHAIOTL = "Doom of Mokhaiotl";
+
+	// A full run, the only kind that gets a duration. Doom can continue past level 8, but only levels 1-8 are timed.
+	private static final int COLOSSEUM_FULL_RUN_WAVES = 12;
+	private static final int DOOM_FULL_RUN_LEVELS = 8;
+
 	// The duration message arrives on the kill, the game reports the loot around the same time
 	private static final int KILL_TIME_MAX_AGE_TICKS = 30;
 
@@ -112,6 +129,10 @@ public class PostiePetePlugin extends Plugin
 	private LootEvent.KillTime lastKillTime;
 	private int lastKillTimeTick;
 
+	private Integer lastColosseumWave;
+	private Integer lastDoomLevel;
+	private Double doomFullRunDuration;
+
 	private final KillCounts killCounts = new KillCounts(KILL_TIME_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS,
 		KILL_WITHOUT_LOOT_TICKS);
 
@@ -146,6 +167,9 @@ public class PostiePetePlugin extends Plugin
 	protected void shutDown() throws Exception
 	{
 		lastKillTime = null;
+		lastColosseumWave = null;
+		lastDoomLevel = null;
+		doomFullRunDuration = null;
 		killCounts.reset();
 		collectionLogReady = false;
 		lastCollectionLogItemId = 0;
@@ -183,12 +207,34 @@ public class PostiePetePlugin extends Plugin
 
 		LootEvent.KillTime completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
 		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), client.getTickCount());
+		Integer wave = null;
+
+		// Loot can be claimed after any wave / delve level. Send how far the run got, and a duration
+		// only for a full run. The game only reports per-wave / per-level personal bests, so no personal
+		// best is sent; the API derives run personal bests from the durations.
+		if (COLOSSEUM.equals(event.getName()))
+		{
+			wave = lastColosseumWave;
+			completionTime = wave != null && wave >= COLOSSEUM_FULL_RUN_WAVES
+				? withoutPersonalBest(ticksToSeconds(client.getVarpValue(VarPlayerID.COLOSSEUM_TOTAL_DURATION)))
+				: null;
+		}
+		else if (DOOM_OF_MOKHAIOTL.equals(event.getName()))
+		{
+			// The Loot Tracker passes the delve level as metadata
+			wave = event.getMetadata() instanceof Integer ? (Integer) event.getMetadata() : null;
+			completionTime = wave != null && wave >= DOOM_FULL_RUN_LEVELS ? withoutPersonalBest(doomFullRunDuration) : null;
+		}
+		lastColosseumWave = null;
+		lastDoomLevel = null;
+		doomFullRunDuration = null;
+
 		if (!config.sendLoot())
 		{
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(event.getName(), kill, null, completionTime),
+		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(event.getName(), kill, null, completionTime, wave),
 			toDrops(event.getItems())));
 	}
 
@@ -204,7 +250,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		postEvent(new LootEvent(common(localPlayer),
-			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime),
+			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null),
 			toDrops(event.getItems())));
 	}
 
@@ -284,7 +330,7 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(null, kill, null, killTime),
+		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(null, kill, null, killTime, null),
 			Collections.emptyList()));
 	}
 
@@ -363,8 +409,37 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		Matcher matcher = COLOSSEUM_WAVE_PATTERN.matcher(event.getMessage());
+		if (matcher.lookingAt())
+		{
+			lastColosseumWave = Integer.parseInt(matcher.group("wave"));
+			return;
+		}
+
+		matcher = DOOM_LEVEL_PATTERN.matcher(event.getMessage());
+		if (matcher.lookingAt())
+		{
+			lastDoomLevel = Integer.parseInt(matcher.group("level"));
+			if (lastDoomLevel == 1)
+			{
+				doomFullRunDuration = null;
+			}
+			return;
+		}
+
+		// Keep the run time at the end of level 8; time spent on deeper levels doesn't count
+		matcher = DOOM_TOTAL_DURATION_PATTERN.matcher(event.getMessage());
+		if (matcher.lookingAt())
+		{
+			if (lastDoomLevel != null && lastDoomLevel >= DOOM_FULL_RUN_LEVELS && doomFullRunDuration == null)
+			{
+				doomFullRunDuration = parseDuration(matcher.group("time"));
+			}
+			return;
+		}
+
 		int tick = client.getTickCount();
-		Matcher matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
+		matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
 		if (matcher.find())
 		{
 			lastKillTime = parseKillTime(matcher);
@@ -443,6 +518,14 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
+	 * A duration the game reports no personal best with, or null if there is none.
+	 */
+	private static LootEvent.KillTime withoutPersonalBest(Double duration)
+	{
+		return duration != null ? new LootEvent.KillTime(duration, null, false) : null;
+	}
+
+	/**
 	 * Parses "1:23", "1:23.40" or "1:02:03.40" into seconds.
 	 */
 	private static double parseDuration(String duration)
@@ -454,6 +537,14 @@ public class PostiePetePlugin extends Plugin
 			seconds = (seconds + Integer.parseInt(parts[i])) * 60;
 		}
 		return seconds + Double.parseDouble(parts[parts.length - 1]);
+	}
+
+	/**
+	 * Converts a game tick count (0.6s each) to seconds, or null if no ticks were counted.
+	 */
+	private static Double ticksToSeconds(int ticks)
+	{
+		return ticks > 0 ? ticks * 6 / 10.0 : null;
 	}
 
 	/**

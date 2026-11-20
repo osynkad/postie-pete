@@ -67,16 +67,23 @@ class LootEvent extends PostieEvent
 		boolean newPersonalBest;
 
 		/**
+		 * How far the run got when the loot was claimed, for activities where loot can be claimed early: the
+		 * Fortis Colosseum wave (1-12) or the Doom of Mokhaiotl delve level. Null otherwise.
+		 */
+		Integer wave;
+
+		/**
 		 * Builds the source from the Loot Tracker's name and the kill count message that came with the loot, if any.
 		 */
-		static Source of(String lootTrackerName, Kill kill, Integer npcId, KillTime killTime)
+		static Source of(String lootTrackerName, Kill kill, Integer npcId, KillTime killTime, Integer wave)
 		{
 			String name = kill != null ? kill.getName() : lootTrackerName;
 			String lootName = lootTrackerName != null && !lootTrackerName.equals(name) ? lootTrackerName : null;
 			return new Source(name, lootName, npcId, kill != null ? kill.getCount() : null,
 				killTime != null ? killTime.getDuration() : null,
 				killTime != null ? killTime.getPersonalBest() : null,
-				killTime != null && killTime.isNewPersonalBest());
+				killTime != null && killTime.isNewPersonalBest(),
+				wave);
 		}
 	}
 
