@@ -58,9 +58,12 @@ public class PostiePetePlugin extends Plugin
 			+ "|The Fractured Archive: Total completion time:) "
 			+ "(?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)</col>(?<newpb> \\(new personal best\\))?");
 
-	// "Congratulations, you've completed a hard combat task: Task Name (3 points)."
-	private static final Pattern COMBAT_ACHIEVEMENT_PATTERN = Pattern.compile(
-		"Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+?)(?: \\(\\d+ points?\\))?\\.?");
+	// "CA_ID:648|Congratulations, you've completed a hard combat task: @ach_comp@Task Name (3 points).", tags removed.
+	// The game puts the task id in front of the message and colours the task name with an @...@ code, which
+	// Text.removeTags leaves in. Older messages came without either.
+	static final Pattern COMBAT_ACHIEVEMENT_PATTERN = Pattern.compile(
+		"(?:CA_ID:(?<id>\\d+)\\|)?Congratulations, you've completed an? (?<tier>\\w+) combat task: (?:@\\w+@)?(?<task>.+?)"
+			+ "(?: \\(\\d+ points?\\))?\\.?");
 
 	// The duration message arrives on the kill, the game reports the loot around the same time
 	private static final int KILL_TIME_MAX_AGE_TICKS = 30;
@@ -340,8 +343,9 @@ public class PostiePetePlugin extends Plugin
 		matcher = COMBAT_ACHIEVEMENT_PATTERN.matcher(message);
 		if (matcher.matches() && config.sendCombatAchievement())
 		{
+			String id = matcher.group("id");
 			postEvent(new CombatAchievementEvent(common(localPlayer),
-				matcher.group("tier").toLowerCase(), matcher.group("task")));
+				matcher.group("tier").toLowerCase(), matcher.group("task"), id == null ? null : Integer.valueOf(id)));
 		}
 	}
 

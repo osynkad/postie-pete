@@ -98,6 +98,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | --- | --- | --- |
 | `tier` | string | Combat task tier, lower case: `"easy"`, `"medium"`, `"hard"`, `"elite"`, `"master"` or `"grandmaster"`. |
 | `task` | string | Combat task name, e.g. `"Noxious Foe"`. |
+| `taskId` | number \| null | The game's task ID, e.g. `402`. `null` if the game's message didn't include it. |
 
 ```json
 {
@@ -106,7 +107,8 @@ New event types and new fields may be added in later versions. Ignore event type
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
   "tier": "hard",
-  "task": "Why Are You Running?"
+  "task": "Why Are You Running?",
+  "taskId": 402
 }
 ```
 
