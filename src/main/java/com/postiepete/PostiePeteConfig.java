@@ -36,7 +36,6 @@ public interface PostiePeteConfig extends Config
 		keyName = "endpointUrl",
 		name = "Endpoint URL",
 		description = "Full URL that events are POSTed to, e.g. http://localhost:3000/events",
-		warning = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers",
 		position = 0
 	)
 	default String endpointUrl()
