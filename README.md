@@ -106,7 +106,7 @@ The items are the ones you had when the fight started, not when the loot arrived
 | `capturedAt` | string | How the fight's start was found, tried in this order: `"runStart"` (the start of a Colosseum, Doom, Fight Caves, Inferno, Chambers of Xeric or Fractured Archive run: wave 1, delve level 1, the raid's start or the first boss), `"fightTime"` (the kill time the game printed, counted back from the kill), `"firstHit"` (your first landed hit on the boss, for bosses the game prints no time for; for Barrows, your first hit on the first brother) or `"kill"` (none of these was known, e.g. the plugin was turned on mid-fight, so the items are from when the loot arrived). |
 | `equipment` | object | Worn items keyed by slot: `"HEAD"`, `"CAPE"`, `"AMULET"`, `"WEAPON"`, `"BODY"`, `"SHIELD"`, `"LEGS"`, `"GLOVES"`, `"BOOTS"`, `"RING"`, `"AMMO"`. Each value is `{ "id": number, "quantity": number }`. Empty slots are left out. |
 | `inventory` | object | Inventory items keyed by slot index, `"0"` to `"27"`, as `{ "id": number, "quantity": number }`. Empty slots are left out. |
-| `rune_pouch` | array \| null | The runes in the rune pouch, as `{ "id": number, "quantity": number }`, or `null` if it is empty. The game keeps this even when no pouch is carried, so check the inventory for a rune pouch. |
+| `runePouch` | array \| null | The runes in the rune pouch, as `{ "id": number, "quantity": number }`, or `null` if it is empty. The game keeps this even when no pouch is carried, so check the inventory for a rune pouch. |
 | `quiver` | object \| null | The ammo in Dizana's quiver, as `{ "id": number, "quantity": number }`, or `null` if empty. The game keeps this even when no quiver is worn, so check the cape. |
 
 #### Team
@@ -152,7 +152,7 @@ A raid chest whose completion wasn't seen (e.g. the plugin was turned on mid-rai
       "1": { "id": 12791, "quantity": 1 },
       "2": { "id": 6685, "quantity": 1 }
     },
-    "rune_pouch": [{ "id": 560, "quantity": 3000 }, { "id": 565, "quantity": 1500 }],
+    "runePouch": [{ "id": 560, "quantity": 3000 }, { "id": 565, "quantity": 1500 }],
     "quiver": null
   },
   "team": { "size": 1 }
@@ -189,7 +189,7 @@ A Fortis Colosseum chest claimed after wave 3:
     "capturedAt": "runStart",
     "equipment": { "WEAPON": { "id": 20997, "quantity": 1 } },
     "inventory": { "0": { "id": 12926, "quantity": 1 } },
-    "rune_pouch": null,
+    "runePouch": null,
     "quiver": null
   },
   "team": { "size": 1 }
@@ -228,7 +228,7 @@ A Fractured Archive chest:
     "capturedAt": "runStart",
     "equipment": { "WEAPON": { "id": 4151, "quantity": 1 } },
     "inventory": {},
-    "rune_pouch": null,
+    "runePouch": null,
     "quiver": null
   },
   "team": { "size": 3 }
@@ -280,6 +280,7 @@ Field order in the JSON is not guaranteed.
 Changes to the `loot` payload that need a receiver to be updated:
 
 - **`raid` is removed.** The Fractured Archive's boss splits are now in [`source.splits`](#splits), and each split's `boss` is now `name`. `source.splits` also holds the waves of the Fortis Colosseum, Doom of Mokhaiotl, the Fight Caves and the Inferno.
+- **`playerItems` is back** (an earlier version stopped sending it), with `rune_pouch` renamed to `runePouch`.
 
 ## Requirements
 

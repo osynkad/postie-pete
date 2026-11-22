@@ -103,13 +103,13 @@ public class PostieEventTest
 			new LootEvent.Team(1)));
 
 		JsonObject items = json.getAsJsonObject("playerItems");
-		assertEquals(set("capturedAt", "equipment", "inventory", "rune_pouch", "quiver"), items.keySet());
+		assertEquals(set("capturedAt", "equipment", "inventory", "runePouch", "quiver"), items.keySet());
 		assertEquals("runStart", items.get("capturedAt").getAsString());
 		JsonObject weapon = items.getAsJsonObject("equipment").getAsJsonObject("WEAPON");
 		assertEquals(set("id", "quantity"), weapon.keySet());
 		assertEquals(20997, weapon.get("id").getAsInt());
 		assertEquals(12926, items.getAsJsonObject("inventory").getAsJsonObject("0").get("id").getAsInt());
-		assertEquals(3000, items.getAsJsonArray("rune_pouch").get(0).getAsJsonObject().get("quantity").getAsInt());
+		assertEquals(3000, items.getAsJsonArray("runePouch").get(0).getAsJsonObject().get("quantity").getAsInt());
 		assertEquals(true, items.get("quiver").isJsonNull());
 
 		JsonObject source = json.getAsJsonObject("source");

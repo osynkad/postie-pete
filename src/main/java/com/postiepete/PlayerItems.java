@@ -33,7 +33,6 @@ class PlayerItems
 	 * Sent unconditionally: the game keeps this value even when no pouch is carried,
 	 * so the receiver should check the inventory to decide whether it is in use.
 	 */
-	@SerializedName("rune_pouch")
 	List<SlotItem> runePouch;
 
 	/**
