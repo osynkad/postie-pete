@@ -25,13 +25,19 @@ class LootEvent extends PostieEvent
 	 */
 	final PlayerItems playerItems;
 
-	LootEvent(Common common, Source source, Raid raid, List<Drop> drops, PlayerItems playerItems)
+	/**
+	 * Each wave's time, for the Fortis Colosseum, Doom of Mokhaiotl, the Fight Caves and the Inferno. Null otherwise.
+	 */
+	final List<Wave> waves;
+
+	LootEvent(Common common, Source source, Raid raid, List<Drop> drops, PlayerItems playerItems, List<Wave> waves)
 	{
 		super(LOOT, common);
 		this.source = source;
 		this.raid = raid;
 		this.drops = drops;
 		this.playerItems = playerItems;
+		this.waves = waves;
 	}
 
 	@Value
@@ -158,6 +164,22 @@ class LootEvent extends PostieEvent
 
 		/**
 		 * The boss's duration in seconds, e.g. 141.0.
+		 */
+		double duration;
+	}
+
+	@Value
+	static class Wave
+	{
+		/**
+		 * The wave, or the Doom of Mokhaiotl delve level. Levels past 8 are printed as e.g. "8+ (22)", and the
+		 * level in brackets is used.
+		 */
+		int wave;
+
+		/**
+		 * The wave's time in seconds: as the game printed it for the Colosseum and Doom, or counted in game ticks
+		 * from this wave's start to the next one's for the Fight Caves and the Inferno.
 		 */
 		double duration;
 	}

@@ -31,9 +31,9 @@ public class PostieEventTest
 		JsonObject json = toJson(new LootEvent(COMMON,
 			LootEvent.Source.of("Mad Angel", new LootEvent.Kill("Mad Angel", 212), 16305,
 				new LootEvent.KillTime(48.6, 41.2, false), null),
-			null, Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450)), null));
+			null, Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450)), null, null));
 
-		assertEquals(with(COMMON_FIELDS, "source", "raid", "drops", "playerItems"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "source", "raid", "drops", "playerItems", "waves"), json.keySet());
 		assertEquals("loot", json.get("eventType").getAsString());
 		assertEquals("ExamplePlayer", json.get("rsn").getAsString());
 		JsonObject source = json.getAsJsonObject("source");
@@ -49,6 +49,7 @@ public class PostieEventTest
 		assertEquals(true, source.get("wave").isJsonNull());
 		assertEquals(true, json.get("raid").isJsonNull());
 		assertEquals(true, json.get("playerItems").isJsonNull());
+		assertEquals(true, json.get("waves").isJsonNull());
 		JsonObject drop = json.getAsJsonArray("drops").get(0).getAsJsonObject();
 		assertEquals(set("itemId", "itemName", "quantity", "value"), drop.keySet());
 		assertEquals(536, drop.get("itemId").getAsInt());
@@ -64,7 +65,7 @@ public class PostieEventTest
 		JsonObject json = toJson(new LootEvent(COMMON,
 			LootEvent.Source.of("Fractured Archive", new LootEvent.Kill("Fractured Archive", 75), null,
 				new LootEvent.KillTime(1534.2, 1534.2, true), null),
-			raid, Collections.emptyList(), null));
+			raid, Collections.emptyList(), null, null));
 
 		JsonObject raidJson = json.getAsJsonObject("raid");
 		assertEquals(set("splits"), raidJson.keySet());
@@ -75,7 +76,7 @@ public class PostieEventTest
 	}
 
 	@Test
-	public void bossKillSendsGear()
+	public void bossKillSendsGearAndWaves()
 	{
 		Map<String, PlayerItems.SlotItem> equipment = new LinkedHashMap<>();
 		equipment.put("WEAPON", new PlayerItems.SlotItem(20997, 1));
@@ -84,8 +85,10 @@ public class PostieEventTest
 		PlayerItems gear = new PlayerItems(null, equipment, inventory,
 			Collections.singletonList(new PlayerItems.SlotItem(560, 3000)), null)
 			.withCapturedAt(PlayerItems.CapturedAt.RUN_START);
+		List<LootEvent.Wave> waves = Arrays.asList(new LootEvent.Wave(1, 34.2), new LootEvent.Wave(2, 69.6));
+
 		JsonObject json = toJson(new LootEvent(COMMON,
-			LootEvent.Source.of("Fortis Colosseum", null, null, null, 2), null, Collections.emptyList(), gear));
+			LootEvent.Source.of("Fortis Colosseum", null, null, null, 2), null, Collections.emptyList(), gear, waves));
 
 		JsonObject items = json.getAsJsonObject("playerItems");
 		assertEquals(set("capturedAt", "equipment", "inventory", "rune_pouch", "quiver"), items.keySet());
@@ -96,6 +99,11 @@ public class PostieEventTest
 		assertEquals(12926, items.getAsJsonObject("inventory").getAsJsonObject("0").get("id").getAsInt());
 		assertEquals(3000, items.getAsJsonArray("rune_pouch").get(0).getAsJsonObject().get("quantity").getAsInt());
 		assertEquals(true, items.get("quiver").isJsonNull());
+
+		JsonObject wave = json.getAsJsonArray("waves").get(1).getAsJsonObject();
+		assertEquals(set("wave", "duration"), wave.keySet());
+		assertEquals(2, wave.get("wave").getAsInt());
+		assertEquals(69.6, wave.get("duration").getAsDouble(), 0);
 	}
 
 	@Test

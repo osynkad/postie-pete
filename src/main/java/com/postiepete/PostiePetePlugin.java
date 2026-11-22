@@ -28,6 +28,7 @@ import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
@@ -82,12 +83,28 @@ public class PostiePetePlugin extends Plugin
 		"(?:CA_ID:(?<id>\\d+)\\|)?Congratulations, you've completed an? (?<tier>\\w+) combat task: (?:@\\w+@)?(?<task>.+?)"
 			+ "(?: \\(\\d+ points?\\))?\\.?");
 
-	// "Wave 2 completed! Wave duration: @mes_hl_red@1:09.60</col>"
-	private static final Pattern COLOSSEUM_WAVE_PATTERN = Pattern.compile("Wave (?<wave>\\d+) completed!");
+	// "Wave 2 completed! Wave duration: @mes_hl_red@1:09.60</col>". The time is optional, so the wave is still
+	// followed if its format changes.
+	static final Pattern COLOSSEUM_WAVE_PATTERN = Pattern.compile(
+		"Wave (?<wave>\\d+) completed!(?: Wave duration: (?:<col=[0-9a-f]{6}>|@.+?@)?(?<time>[0-9:]+(?:\\.[0-9]+)?))?");
 
 	// "Delve level: 2 duration: @mes_hl_red@1:19.80</col>. Personal best: ..." (Doom of Mokhaiotl). Levels past 8
-	// show the real level in brackets: "Delve level: 8+ (22) duration: 1:08.4. Personal best: 0:54.0" (seen in game).
-	static final Pattern DOOM_LEVEL_PATTERN = Pattern.compile("Delve level: (?<level>\\d+)\\+?(?: \\((?<deep>\\d+)\\))? duration:");
+	// show the real level in brackets: "Delve level: 8+ (22) duration: 1:08.4. Personal best: 0:54.0" (seen in
+	// game). The time is optional, like the Colosseum's.
+	static final Pattern DOOM_LEVEL_PATTERN = Pattern.compile(
+		"Delve level: (?<level>\\d+)\\+?(?: \\((?<deep>\\d+)\\))? duration:"
+			+ "(?: (?:<col=[0-9a-f]{6}>|@.+?@)?(?<time>[0-9:]+(?:\\.[0-9]+)?))?");
+
+	// "<col=ef1020>Wave: 12</col>", tags removed: the start of a Fight Caves or Inferno wave
+	static final Pattern TZHAAR_WAVE_PATTERN = Pattern.compile("Wave: (?<wave>\\d+)");
+
+	// The map regions of the Fight Caves and the Inferno, where "Wave: N" messages are theirs
+	private static final int FIGHT_CAVES_REGION = 9551;
+	private static final int INFERNO_REGION = 9043;
+
+	// The kill count message names that end a Fight Caves and an Inferno run
+	private static final String FIGHT_CAVES_KILL = "TzTok-Jad";
+	private static final String INFERNO_KILL = "TzKal-Zuk";
 
 	// Regular rune pouch uses the first 3 slots, divine rune pouch uses all 4
 	private static final int[] RUNE_POUCH_TYPE_VARBITS = {
@@ -167,9 +184,13 @@ public class PostiePetePlugin extends Plugin
 	private LootEvent.KillTime lastKillTime;
 	private int lastKillTimeTick;
 
-	private Integer lastColosseumWave;
 	private Integer lastDoomLevel;
 	private Double doomFullRunDuration;
+
+	private final WaveRun colosseum = new WaveRun();
+	private final WaveRun doom = new WaveRun();
+	private final WaveRun fightCaves = new WaveRun();
+	private final WaveRun inferno = new WaveRun();
 
 	private final FracturedArchive fracturedArchive = new FracturedArchive();
 
@@ -214,9 +235,12 @@ public class PostiePetePlugin extends Plugin
 	protected void shutDown() throws Exception
 	{
 		lastKillTime = null;
-		lastColosseumWave = null;
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
+		colosseum.reset();
+		doom.reset();
+		fightCaves.reset();
+		inferno.reset();
 		fracturedArchive.reset();
 		killCounts.reset();
 		gearHistory.reset();
@@ -263,6 +287,7 @@ public class PostiePetePlugin extends Plugin
 		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
 		Integer wave = null;
 		LootEvent.Raid raid = null;
+		WaveRun.Run run = null;
 		Integer runStart = null;
 		// Chests with a kill count message are boss kills, and so are these activities' chests without one
 		boolean bossKill = kill != null;
@@ -273,7 +298,8 @@ public class PostiePetePlugin extends Plugin
 		// Doom only reports per-level personal bests, so its run time has none.
 		if (COLOSSEUM.equals(event.getName()))
 		{
-			wave = lastColosseumWave;
+			wave = colosseum.lastWave();
+			run = colosseum.consume();
 			// A full run's kill count message is Sol Heredit's. The loot keeps the Colosseum's name, so full and
 			// partial runs stay one source.
 			LootEvent.Kill solHeredit = killCounts.claimForChest(SOL_HEREDIT, tick);
@@ -295,6 +321,7 @@ public class PostiePetePlugin extends Plugin
 		{
 			// The Loot Tracker passes the delve level as metadata
 			wave = event.getMetadata() instanceof Integer ? (Integer) event.getMetadata() : null;
+			run = doom.consume();
 			completionTime = wave != null && wave >= DOOM_FULL_RUN_LEVELS ? withoutPersonalBest(doomFullRunDuration) : null;
 			bossKill = true;
 		}
@@ -304,7 +331,10 @@ public class PostiePetePlugin extends Plugin
 			raid = fracturedArchive.consumeRaid();
 			bossKill = true;
 		}
-		lastColosseumWave = null;
+		if (run != null)
+		{
+			runStart = run.getStartTick();
+		}
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
 
@@ -315,7 +345,7 @@ public class PostiePetePlugin extends Plugin
 
 		PlayerItems gear = bossKill ? gearAtStart(runStart, fightTimeStart, firstHit) : null;
 		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(event.getName(), kill, null, completionTime, wave),
-			raid, toDrops(event.getItems()), gear));
+			raid, toDrops(event.getItems()), gear, run != null ? run.getWaves() : null));
 	}
 
 	private void onNpcLoot(Player localPlayer, LootReceived event)
@@ -336,7 +366,7 @@ public class PostiePetePlugin extends Plugin
 		PlayerItems gear = kill != null ? gearAtStart(null, fightTimeStart, firstHit) : null;
 		postEvent(new LootEvent(common(localPlayer),
 			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null),
-			null, toDrops(event.getItems()), gear));
+			null, toDrops(event.getItems()), gear, null));
 	}
 
 	/**
@@ -367,6 +397,10 @@ public class PostiePetePlugin extends Plugin
 			// Game ticks before and after aren't comparable, and the account can change
 			gearHistory.reset();
 			fightStarts.reset();
+			colosseum.onLogout();
+			doom.onLogout();
+			fightCaves.onLogout();
+			inferno.onLogout();
 			fracturedArchive.onLogout();
 		}
 		else if (state == GameState.LOGGED_IN)
@@ -430,6 +464,15 @@ public class PostiePetePlugin extends Plugin
 		LootEvent.KillTime killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
 		Integer fightTimeStart = fightStartTick(killTime);
 		Integer firstHit = fightStarts.take(kill.getName(), client.getTickCount());
+		WaveRun.Run run = null;
+		if (FIGHT_CAVES_KILL.equals(kill.getName()))
+		{
+			run = fightCaves.consume();
+		}
+		else if (INFERNO_KILL.equals(kill.getName()))
+		{
+			run = inferno.consume();
+		}
 
 		Player localPlayer = client.getLocalPlayer();
 		log.debug("Kill without loot: {} {}, duration {}", kill.getName(), kill.getCount(), killTime);
@@ -438,9 +481,9 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		PlayerItems gear = gearAtStart(null, fightTimeStart, firstHit);
+		PlayerItems gear = gearAtStart(run != null ? run.getStartTick() : null, fightTimeStart, firstHit);
 		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(null, kill, null, killTime, null),
-			null, Collections.emptyList(), gear));
+			null, Collections.emptyList(), gear, run != null ? run.getWaves() : null));
 	}
 
 	/**
@@ -480,7 +523,7 @@ public class PostiePetePlugin extends Plugin
 	private Integer fightStartTick(LootEvent.KillTime killTime)
 	{
 		// lastKillTimeTick is left as it was when the kill time was consumed
-		return killTime != null ? lastKillTimeTick - (int) Math.round(killTime.getDuration() / 0.6) : null;
+		return killTime != null ? lastKillTimeTick - WaveRun.secondsToTicks(killTime.getDuration()) : null;
 	}
 
 	/**
@@ -613,7 +656,14 @@ public class PostiePetePlugin extends Plugin
 		Matcher matcher = COLOSSEUM_WAVE_PATTERN.matcher(event.getMessage());
 		if (matcher.lookingAt())
 		{
-			lastColosseumWave = Integer.parseInt(matcher.group("wave"));
+			int wave = Integer.parseInt(matcher.group("wave"));
+			Double duration = optionalDuration(matcher);
+			// Waves 1-11 show their own time, but wave 12 shows the whole run's (seen in game)
+			if (wave == COLOSSEUM_FULL_RUN_WAVES && duration != null)
+			{
+				duration = colosseum.ownTime(wave, duration);
+			}
+			colosseum.onWaveCompleted(wave, duration, tick);
 			return;
 		}
 
@@ -626,6 +676,7 @@ public class PostiePetePlugin extends Plugin
 			{
 				doomFullRunDuration = null;
 			}
+			doom.onWaveCompleted(lastDoomLevel, optionalDuration(matcher), tick);
 			return;
 		}
 
@@ -645,6 +696,17 @@ public class PostiePetePlugin extends Plugin
 		if (message.equals(FracturedArchive.RUN_START_MESSAGE))
 		{
 			fracturedArchive.onRunStarted(tick);
+			return;
+		}
+
+		matcher = TZHAAR_WAVE_PATTERN.matcher(message);
+		if (matcher.matches())
+		{
+			WaveRun tzhaarRun = tzhaarRun();
+			if (tzhaarRun != null)
+			{
+				tzhaarRun.onWaveStarted(Integer.parseInt(matcher.group("wave")), tick);
+			}
 			return;
 		}
 
@@ -670,6 +732,15 @@ public class PostiePetePlugin extends Plugin
 		if (killCount != null)
 		{
 			log.debug("Kill count: {} {} (tick {})", killCount.getName(), killCount.getCount(), tick);
+			// The last Fight Caves / Inferno wave ends with the kill
+			if (FIGHT_CAVES_KILL.equals(killCount.getName()))
+			{
+				fightCaves.finish(tick);
+			}
+			else if (INFERNO_KILL.equals(killCount.getName()))
+			{
+				inferno.finish(tick);
+			}
 		}
 
 		Player localPlayer = client.getLocalPlayer();
@@ -692,6 +763,38 @@ public class PostiePetePlugin extends Plugin
 			postEvent(new CombatAchievementEvent(common(localPlayer),
 				matcher.group("tier").toLowerCase(), matcher.group("task"), id == null ? null : Integer.valueOf(id)));
 		}
+	}
+
+	/**
+	 * The time group of a wave or delve level message in seconds, or null if the message had none.
+	 */
+	private static Double optionalDuration(Matcher matcher)
+	{
+		String time = matcher.group("time");
+		return time != null ? parseDuration(time) : null;
+	}
+
+	/**
+	 * The Fight Caves or Inferno run the player is in, by map region, or null if in neither.
+	 */
+	private WaveRun tzhaarRun()
+	{
+		Player localPlayer = client.getLocalPlayer();
+		if (localPlayer == null)
+		{
+			return null;
+		}
+
+		int region = WorldPoint.fromLocalInstance(client, localPlayer.getLocalLocation()).getRegionID();
+		if (region == FIGHT_CAVES_REGION)
+		{
+			return fightCaves;
+		}
+		if (region == INFERNO_REGION)
+		{
+			return inferno;
+		}
+		return null;
 	}
 
 	/**

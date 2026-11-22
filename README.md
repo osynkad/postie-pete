@@ -56,6 +56,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | `raid` | object \| null | Raid reward chests only (currently the Fractured Archive): see [Raid](#raid). `null` for all other loot. |
 | `drops` | array | The loot received, as a list of `{ "itemId": number, "itemName": string, "quantity": number, "value": number }`. `itemName` comes from the game's item data and isn't unique, so use `itemId` as the key. `value` is the GE value of **one** item when the drop happened, from the OSRS Wiki real-time prices that RuneLite loads (regardless of the player's "Use wiki item prices" setting). Multiply by `quantity` for the stack value. Untradeable variants that RuneLite maps to a tradeable item (e.g. Sanguine Torva → Torva, noted → unnoted) get that item's value. Other untradeable items are `0`, as is any item if RuneLite hasn't loaded prices yet. Coins are `1` and platinum tokens `1000`. |
 | `playerItems` | object \| null | Boss kills only: your items when the fight started. See [Player items](#player-items). `null` for other loot, and when **Send gear** is off. |
+| `waves` | array \| null | Fortis Colosseum, Doom of Mokhaiotl, Fight Caves and Inferno only: each wave's time. See [Waves](#waves). `null` for all other loot. |
 
 #### Source
 
@@ -88,11 +89,20 @@ The items are the ones you had when the fight started, not when the loot arrived
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `capturedAt` | string | How the fight's start was found, tried in this order: `"runStart"` (the start of a Fractured Archive run: its first boss), `"fightTime"` (the kill time the game printed, counted back from the kill), `"firstHit"` (your first landed hit on the boss, for bosses the game prints no time for; for Barrows, your first hit on the first brother) or `"kill"` (none of these was known, e.g. the plugin was turned on mid-fight, so the items are from when the loot arrived). |
+| `capturedAt` | string | How the fight's start was found, tried in this order: `"runStart"` (the start of a Colosseum, Doom, Fight Caves, Inferno or Fractured Archive run: wave 1, delve level 1 or the first boss), `"fightTime"` (the kill time the game printed, counted back from the kill), `"firstHit"` (your first landed hit on the boss, for bosses the game prints no time for; for Barrows, your first hit on the first brother) or `"kill"` (none of these was known, e.g. the plugin was turned on mid-fight, so the items are from when the loot arrived). |
 | `equipment` | object | Worn items keyed by slot: `"HEAD"`, `"CAPE"`, `"AMULET"`, `"WEAPON"`, `"BODY"`, `"SHIELD"`, `"LEGS"`, `"GLOVES"`, `"BOOTS"`, `"RING"`, `"AMMO"`. Each value is `{ "id": number, "quantity": number }`. Empty slots are left out. |
 | `inventory` | object | Inventory items keyed by slot index, `"0"` to `"27"`, as `{ "id": number, "quantity": number }`. Empty slots are left out. |
 | `rune_pouch` | array \| null | The runes in the rune pouch, as `{ "id": number, "quantity": number }`, or `null` if it is empty. The game keeps this even when no pouch is carried, so check the inventory for a rune pouch. |
 | `quiver` | object \| null | The ammo in Dizana's quiver, as `{ "id": number, "quantity": number }`, or `null` if empty. The game keeps this even when no quiver is worn, so check the cape. |
+
+#### Waves
+
+Sent with the Fortis Colosseum and Doom of Mokhaiotl chests, whenever they are claimed, and with the `"TzTok-Jad"` (Fight Caves) and `"TzKal-Zuk"` (Inferno) kills. A list of `{ "wave": number, "duration": number }` in the order played. Empty when none were seen (e.g. the plugin was turned on mid-run).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `wave` | number | The wave, or the delve level for Doom. Doom levels past 8 are printed as e.g. "8+ (22)"; the level in brackets is used. |
+| `duration` | number | The wave's time in seconds. For the Colosseum and Doom, the time the game printed. The Colosseum's wave 12 message shows the whole run's time instead, so wave 12 is that time less waves 1–11, and is left out if any of them is missing. For the Fight Caves and the Inferno, counted in game ticks (0.6 seconds each) from the wave's start message to the next one's, so the time between waves is included. The last wave ends at the kill count message. |
 
 ```json
 {
@@ -129,10 +139,49 @@ The items are the ones you had when the fight started, not when the loot arrived
     },
     "rune_pouch": [{ "id": 560, "quantity": 3000 }, { "id": 565, "quantity": 1500 }],
     "quiver": null
-  }
+  },
+  "waves": null
 }
 ```
 
+A Fortis Colosseum chest claimed after wave 3:
+
+```json
+{
+  "eventType": "loot",
+  "timestamp": "2026-11-21T19:42:08Z",
+  "rsn": "ExamplePlayer",
+  "accountHash": "-3412345678901234567",
+  "source": {
+    "name": "Fortis Colosseum",
+    "lootName": null,
+    "npcId": null,
+    "killCount": null,
+    "duration": null,
+    "personalBest": null,
+    "newPersonalBest": false,
+    "wave": 3
+  },
+  "raid": null,
+  "drops": [
+    { "itemId": 995, "itemName": "Coins", "quantity": 40000, "value": 1 }
+  ],
+  "playerItems": {
+    "capturedAt": "runStart",
+    "equipment": { "WEAPON": { "id": 20997, "quantity": 1 } },
+    "inventory": { "0": { "id": 12926, "quantity": 1 } },
+    "rune_pouch": null,
+    "quiver": null
+  },
+  "waves": [
+    { "wave": 1, "duration": 34.2 },
+    { "wave": 2, "duration": 69.6 },
+    { "wave": 3, "duration": 81.0 }
+  ]
+}
+```
+
+A Fractured Archive chest:
 
 ```json
 {
@@ -168,7 +217,8 @@ The items are the ones you had when the fight started, not when the loot arrived
     "inventory": {},
     "rune_pouch": null,
     "quiver": null
-  }
+  },
+  "waves": null
 }
 ```
 
