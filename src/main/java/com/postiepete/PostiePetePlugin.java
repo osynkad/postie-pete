@@ -337,7 +337,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		int tick = client.getTickCount();
-		LootEvent.KillTime completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
+		LootEvent.KillTime completionTime = consumeKillTime(chestKillTimeMaxAge(event.getName()));
 		Integer fightTimeStart = fightStartTick(completionTime);
 		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), tick);
 		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
@@ -465,6 +465,19 @@ public class PostiePetePlugin extends Plugin
 		postEvent(new LootEvent(common(localPlayer),
 			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null, null),
 			toDrops(event.getItems()), gear, team));
+	}
+
+	/**
+	 * How old a kill time can be and still belong to this event loot. Raid chests and the Colosseum and Doom
+	 * chests are opened long after their completion time is printed. Other loot only takes a time printed with it,
+	 * so a leftover time (e.g. an agility lap's) can't end up on a clue casket or a Barrows chest.
+	 */
+	static int chestKillTimeMaxAge(String lootName)
+	{
+		boolean raidChest = lootName != null && lootName.equals(RaidTeams.chestName(lootName));
+		return raidChest || COLOSSEUM.equals(lootName) || DOOM_OF_MOKHAIOTL.equals(lootName)
+			? CHEST_TIME_MAX_AGE_TICKS
+			: KILL_TIME_MAX_AGE_TICKS;
 	}
 
 	/**

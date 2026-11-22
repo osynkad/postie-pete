@@ -10,6 +10,20 @@ import org.junit.Test;
 public class KillTimeTest
 {
 	@Test
+	public void onlyChestsOpenedLongAfterTheirTimeTakeAnOldKillTime()
+	{
+		int shortWindow = PostiePetePlugin.chestKillTimeMaxAge("Barrows");
+		for (String chest : new String[]{"Theatre of Blood", "Tombs of Amascut", "Chambers of Xeric", "Fractured Archive",
+			"Fortis Colosseum", "Doom of Mokhaiotl"})
+		{
+			assertTrue(chest, PostiePetePlugin.chestKillTimeMaxAge(chest) > shortWindow);
+		}
+		assertEquals(shortWindow, PostiePetePlugin.chestKillTimeMaxAge("Clue Scroll (Hard)"));
+		assertEquals(shortWindow, PostiePetePlugin.chestKillTimeMaxAge("Reward cart (Wintertodt)"));
+		assertEquals(shortWindow, PostiePetePlugin.chestKillTimeMaxAge(null));
+	}
+
+	@Test
 	public void newPersonalBestIsTheDuration()
 	{
 		LootEvent.KillTime time = parse("Fight duration: <col=ff0000>1:19.80</col> (new personal best)");
