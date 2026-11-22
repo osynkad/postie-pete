@@ -48,4 +48,26 @@ public class RaidTeamsTest
 		assertEquals(Integer.valueOf(4), teams.takeSize("Theatre of Blood"));
 		assertNull(teams.takeSize("Theatre of Blood"));
 	}
+
+	@Test
+	public void coxStartIsTakenByItsChest()
+	{
+		RaidTeams teams = new RaidTeams();
+		teams.onCoxStarted(100);
+		teams.onCompleted("Chambers of Xeric", 3);
+
+		assertEquals(Integer.valueOf(100), teams.takeCoxStartTick());
+		assertNull(teams.takeCoxStartTick());
+		assertEquals(Integer.valueOf(3), teams.takeSize("Chambers of Xeric"));
+	}
+
+	@Test
+	public void aNewCoxRaidForgetsTheLastSize()
+	{
+		RaidTeams teams = new RaidTeams();
+		teams.onCompleted("Chambers of Xeric", 3);
+		teams.onCoxStarted(500);
+
+		assertNull(teams.takeSize("Chambers of Xeric"));
+	}
 }

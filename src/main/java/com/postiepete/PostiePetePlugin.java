@@ -383,6 +383,10 @@ public class PostiePetePlugin extends Plugin
 			raid = fracturedArchive.consumeRaid();
 			bossKill = true;
 		}
+		else if (RaidTeams.CHAMBERS_OF_XERIC.equals(event.getName()))
+		{
+			runStart = raidTeams.takeCoxStartTick();
+		}
 		if (run != null)
 		{
 			runStart = run.getStartTick();
@@ -476,6 +480,7 @@ public class PostiePetePlugin extends Plugin
 			fightStarts.reset();
 			nearbyPlayers.reset();
 			scenePlayers.clear();
+			raidTeams.onLogout();
 			colosseum.onLogout();
 			doom.onLogout();
 			fightCaves.onLogout();
@@ -881,10 +886,10 @@ public class PostiePetePlugin extends Plugin
 	{
 		int tick = client.getTickCount();
 
-		// The Chambers of Xeric tells its party when the raid is completed, with the team size
+		// The Chambers of Xeric tells its party when the raid starts and ends, with the team size
 		if (event.getType() == ChatMessageType.FRIENDSCHATNOTIFICATION)
 		{
-			onRaidPartyMessage(Text.removeTags(event.getMessage()));
+			onRaidPartyMessage(Text.removeTags(event.getMessage()), tick);
 			return;
 		}
 
@@ -1010,12 +1015,16 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * A message to the raid's party, tags removed: the Chambers of Xeric's completion with the team size. Falls
-	 * back to the party size the game keeps if the message shows none.
+	 * A message to the raid's party, tags removed: the Chambers of Xeric's start, or its completion with the
+	 * team size. Falls back to the party size the game keeps if the message shows none.
 	 */
-	private void onRaidPartyMessage(String message)
+	private void onRaidPartyMessage(String message, int tick)
 	{
-		if (message.startsWith(RaidTeams.COX_COMPLETE_MESSAGE))
+		if (message.startsWith(RaidTeams.COX_START_MESSAGE))
+		{
+			raidTeams.onCoxStarted(tick);
+		}
+		else if (message.startsWith(RaidTeams.COX_COMPLETE_MESSAGE))
 		{
 			Integer size = RaidTeams.coxTeamSize(message);
 			if (size == null)
