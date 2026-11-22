@@ -166,8 +166,12 @@ public class PostiePetePlugin extends Plugin
 	// Reward chests are opened some time after the completion message, ~10 minutes
 	private static final int CHEST_TIME_MAX_AGE_TICKS = 1000;
 
-	// NPC loot comes on the kill count message's own tick (seen in game), so a kill still unclaimed after this
-	// had no loot. Well within KILL_TIME_MAX_AGE_TICKS, so the kill keeps its duration.
+	// NPC loot comes on the kill count message's own tick (seen in game), so it only takes a kill count from
+	// then, with a tick to spare. Any older one (e.g. an agility lap count) belongs to something else.
+	private static final int NPC_KILL_COUNT_MAX_AGE_TICKS = 2;
+
+	// A kill still unclaimed after this had no loot. Above NPC_KILL_COUNT_MAX_AGE_TICKS, and well within
+	// KILL_TIME_MAX_AGE_TICKS, so the kill keeps its duration.
 	private static final int KILL_WITHOUT_LOOT_TICKS = 10;
 
 	// RuneLite keeps each plugin's on/off state in the "runelite" config group, under the plugin's class name in
@@ -241,7 +245,7 @@ public class PostiePetePlugin extends Plugin
 	// Set when a party slot changes, so the party size histories get a snapshot on the next tick
 	private boolean partyChanged;
 
-	private final KillCounts killCounts = new KillCounts(KILL_TIME_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS,
+	private final KillCounts killCounts = new KillCounts(NPC_KILL_COUNT_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS,
 		KILL_WITHOUT_LOOT_TICKS);
 
 	// The collection log overview's "most recent item" varp is set to the item ID of each new

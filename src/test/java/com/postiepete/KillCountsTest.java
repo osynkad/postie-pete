@@ -6,7 +6,7 @@ import org.junit.Test;
 
 public class KillCountsTest
 {
-	private static final int NPC_MAX_AGE = 30;
+	private static final int NPC_MAX_AGE = 2;
 	private static final int CHEST_MAX_AGE = 1000;
 	private static final int WITHOUT_LOOT = 10;
 
@@ -64,6 +64,14 @@ public class KillCountsTest
 	{
 		killCounts.onMessage("Your Vorkath kill count is: <col=ff0000>500</col>.", 100);
 		assertNull(killCounts.claimForNpcLoot(101 + NPC_MAX_AGE));
+	}
+
+	@Test
+	public void npcLootKilledAfterAnotherActivityDoesNotTakeItsKillCount()
+	{
+		// A lap count from finishing a lap, then a Man killed a few seconds later
+		killCounts.onMessage("Your Seers' Village Rooftop lap count is: <col=ff0000>50</col>.", 100);
+		assertNull(killCounts.claimForNpcLoot(108));
 	}
 
 	@Test
