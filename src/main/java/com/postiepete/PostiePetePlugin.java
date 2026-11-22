@@ -87,6 +87,7 @@ public class PostiePetePlugin extends Plugin
 		"Challenge complete: (?<boss>.+?)\\. Duration: (?<time>[0-9:]+(?:\\.[0-9]+)?)");
 
 	private static final String COLOSSEUM = "Fortis Colosseum";
+	private static final String SOL_HEREDIT = "Sol Heredit";
 	private static final String DOOM_OF_MOKHAIOTL = "Doom of Mokhaiotl";
 
 	// A full run, the only kind that gets a duration. Doom can continue past level 8, but only levels 1-8 are timed.
@@ -222,14 +223,27 @@ public class PostiePetePlugin extends Plugin
 		LootEvent.Raid raid = null;
 
 		// Loot can be claimed after any wave / delve level. Send how far the run got, and a duration
-		// only for a full run. The game only reports per-wave / per-level personal bests, so no personal
-		// best is sent; the API derives run personal bests from the durations.
+		// only for a full run. A full Colosseum run's time and personal best come from the game's "Colosseum
+		// duration:" message (seen in game), or else the run time the game keeps, without a personal best.
+		// Doom only reports per-level personal bests, so its run time has none.
 		if (COLOSSEUM.equals(event.getName()))
 		{
 			wave = lastColosseumWave;
-			completionTime = wave != null && wave >= COLOSSEUM_FULL_RUN_WAVES
-				? withoutPersonalBest(ticksToSeconds(client.getVarpValue(VarPlayerID.COLOSSEUM_TOTAL_DURATION)))
-				: null;
+			// A full run's kill count message is Sol Heredit's. The loot keeps the Colosseum's name, so full and
+			// partial runs stay one source.
+			LootEvent.Kill solHeredit = killCounts.claimForChest(SOL_HEREDIT, client.getTickCount());
+			if (solHeredit != null)
+			{
+				kill = new LootEvent.Kill(COLOSSEUM, solHeredit.getCount());
+			}
+			if (wave == null || wave < COLOSSEUM_FULL_RUN_WAVES)
+			{
+				completionTime = null;
+			}
+			else if (completionTime == null)
+			{
+				completionTime = withoutPersonalBest(ticksToSeconds(client.getVarpValue(VarPlayerID.COLOSSEUM_TOTAL_DURATION)));
+			}
 		}
 		else if (DOOM_OF_MOKHAIOTL.equals(event.getName()))
 		{

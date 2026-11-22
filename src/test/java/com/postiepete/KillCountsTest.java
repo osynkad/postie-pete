@@ -86,6 +86,8 @@ public class KillCountsTest
 	{
 		killCounts.onMessage("Your Sol Heredit kill count is: <col=ff0000>2</col>.", 100);
 		assertNull(killCounts.claimForChest("Fortis Colosseum", 101));
+		// The Colosseum chest asks for Sol Heredit's by name, and the failed claim above left it there
+		assertEquals(kill("Sol Heredit", 2), killCounts.claimForChest("Sol Heredit", 102));
 	}
 
 	@Test

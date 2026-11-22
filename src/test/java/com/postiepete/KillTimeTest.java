@@ -28,6 +28,19 @@ public class KillTimeTest
 	}
 
 	@Test
+	public void readsTheColosseumRunTime()
+	{
+		// As seen in game, after "Wave 12 completed!"
+		LootEvent.KillTime time = parse("Colosseum duration: <col=ef1020>30:37</col> (new personal best)");
+		assertEquals(1837.0, time.getDuration(), 1e-9);
+		assertTrue(time.isNewPersonalBest());
+
+		time = parse("Colosseum duration: @mes_hl_red@31:02.40</col>. Personal best: @mes_hl_red@30:37.00</col>");
+		assertEquals(1862.4, time.getDuration(), 1e-9);
+		assertEquals(1837.0, time.getPersonalBest(), 1e-9);
+	}
+
+	@Test
 	public void aTimeThatTiesThePersonalBestIsNotANewOne()
 	{
 		LootEvent.KillTime time = parse("Fight duration: <col=ff0000>1:20.00</col>. Personal best: 1:20.00");
