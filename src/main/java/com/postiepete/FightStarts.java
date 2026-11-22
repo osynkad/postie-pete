@@ -3,6 +3,7 @@ package com.postiepete;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import lombok.Value;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.client.util.Text;
 
@@ -111,6 +112,23 @@ class FightStarts
 	}
 
 	/**
+	 * The fight with the most recent hit that isn't over, or null if there is none.
+	 */
+	Current current(int tick)
+	{
+		Map.Entry<String, Fight> latest = null;
+		for (Map.Entry<String, Fight> entry : fights.entrySet())
+		{
+			if (!isStale(entry.getKey(), entry.getValue(), tick)
+				&& (latest == null || entry.getValue().lastHitTick > latest.getValue().lastHitTick))
+			{
+				latest = entry;
+			}
+		}
+		return latest != null ? new Current(latest.getKey(), latest.getValue().firstHitTick) : null;
+	}
+
+	/**
 	 * Drops fights that are over, e.g. ones on NPCs that aren't bosses.
 	 */
 	void prune(int tick)
@@ -127,6 +145,16 @@ class FightStarts
 	{
 		int staleTicks = BARROWS.equals(key) ? BARROWS_STALE_TICKS : STALE_TICKS;
 		return tick - fight.lastHitTick > staleTicks;
+	}
+
+	@Value
+	static class Current
+	{
+		/**
+		 * The fight's {@link #key}.
+		 */
+		String key;
+		int firstHitTick;
 	}
 
 	private static class Fight

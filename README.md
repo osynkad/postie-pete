@@ -57,6 +57,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | `drops` | array | The loot received, as a list of `{ "itemId": number, "itemName": string, "quantity": number, "value": number }`. `itemName` comes from the game's item data and isn't unique, so use `itemId` as the key. `value` is the GE value of **one** item when the drop happened, from the OSRS Wiki real-time prices that RuneLite loads (regardless of the player's "Use wiki item prices" setting). Multiply by `quantity` for the stack value. Untradeable variants that RuneLite maps to a tradeable item (e.g. Sanguine Torva → Torva, noted → unnoted) get that item's value. Other untradeable items are `0`, as is any item if RuneLite hasn't loaded prices yet. Coins are `1` and platinum tokens `1000`. |
 | `playerItems` | object \| null | Boss kills only: your items when the fight started. See [Player items](#player-items). `null` for other loot, and when **Send gear** is off. |
 | `waves` | array \| null | Fortis Colosseum, Doom of Mokhaiotl, Fight Caves and Inferno only: each wave's time. See [Waves](#waves). `null` for all other loot. |
+| `team` | object \| null | Boss kills only: how many players were in the fight. See [Team](#team). `null` for other loot and for Wintertodt, Tempoross and Zalcano. |
 
 #### Source
 
@@ -104,6 +105,16 @@ Sent with the Fortis Colosseum and Doom of Mokhaiotl chests, whenever they are c
 | `wave` | number | The wave, or the delve level for Doom. Doom levels past 8 are printed as e.g. "8+ (22)"; the level in brackets is used. |
 | `duration` | number | The wave's time in seconds. For the Colosseum and Doom, the time the game printed. The Colosseum's wave 12 message shows the whole run's time instead, so wave 12 is that time less waves 1–11, and is left out if any of them is missing. For the Fight Caves and the Inferno, counted in game ticks (0.6 seconds each) from the wave's start message to the next one's, so the time between waves is included. The last wave ends at the kill count message. |
 
+#### Team
+
+Sent with the same boss kills as [Player items](#player-items), except Wintertodt, Tempoross and Zalcano, where the players around are a crowd rather than a team. Only the number of players is sent, never their names.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `size` | number | Players in the fight, including you (`1` = solo). For the **Theatre of Blood**, **Tombs of Amascut** and **Fractured Archive**, the number of players in the raid's party at the raid's start, the same moment `playerItems` is from (or, if that isn't known, when the raid was completed). For the **Chambers of Xeric**, the team size in the game's completion message. For every other boss, you plus each other player who was within 15 tiles of you at some point between the start of the fight (see `capturedAt`) and the kill, including players who died or left before the end. In a public area, someone passing close by during the fight counts too. Solo-only content is always `1`. |
+
+A raid chest whose completion wasn't seen (e.g. the plugin was turned on mid-raid) has `team: null`.
+
 ```json
 {
   "eventType": "loot",
@@ -140,7 +151,8 @@ Sent with the Fortis Colosseum and Doom of Mokhaiotl chests, whenever they are c
     "rune_pouch": [{ "id": 560, "quantity": 3000 }, { "id": 565, "quantity": 1500 }],
     "quiver": null
   },
-  "waves": null
+  "waves": null,
+  "team": { "size": 1 }
 }
 ```
 
@@ -177,7 +189,8 @@ A Fortis Colosseum chest claimed after wave 3:
     { "wave": 1, "duration": 34.2 },
     { "wave": 2, "duration": 69.6 },
     { "wave": 3, "duration": 81.0 }
-  ]
+  ],
+  "team": { "size": 1 }
 }
 ```
 
@@ -218,7 +231,8 @@ A Fractured Archive chest:
     "rune_pouch": null,
     "quiver": null
   },
-  "waves": null
+  "waves": null,
+  "team": { "size": 3 }
 }
 ```
 

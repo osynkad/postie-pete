@@ -30,7 +30,13 @@ class LootEvent extends PostieEvent
 	 */
 	final List<Wave> waves;
 
-	LootEvent(Common common, Source source, Raid raid, List<Drop> drops, PlayerItems playerItems, List<Wave> waves)
+	/**
+	 * How many players were in the fight, for boss kills. Null for other loot and skilling bosses.
+	 */
+	final Team team;
+
+	LootEvent(Common common, Source source, Raid raid, List<Drop> drops, PlayerItems playerItems, List<Wave> waves,
+		Team team)
 	{
 		super(LOOT, common);
 		this.source = source;
@@ -38,6 +44,7 @@ class LootEvent extends PostieEvent
 		this.drops = drops;
 		this.playerItems = playerItems;
 		this.waves = waves;
+		this.team = team;
 	}
 
 	@Value
@@ -166,6 +173,17 @@ class LootEvent extends PostieEvent
 		 * The boss's duration in seconds, e.g. 141.0.
 		 */
 		double duration;
+	}
+
+	@Value
+	static class Team
+	{
+		/**
+		 * Players in the team, including the sender (1 = solo). For raids, the game's party size at the raid's
+		 * start (CoX: its completion message). For other
+		 * bosses, the sender plus every other player who was near them at some point during the fight.
+		 */
+		int size;
 	}
 
 	@Value

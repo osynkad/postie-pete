@@ -8,6 +8,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,6 +36,8 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.PlayerDespawned;
+import net.runelite.api.events.PlayerSpawned;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarPlayerID;
@@ -121,8 +125,24 @@ public class PostiePetePlugin extends Plugin
 		VarbitID.RUNE_POUCH_QUANTITY_4
 	};
 
+	// Each raid's party slots, by chest name: non-zero while a player is in the slot. RuneLite's chat commands
+	// plugin counts ToB and ToA team sizes the same way.
+	private static final Map<String, int[]> RAID_PARTY_SLOTS = Map.of(
+		RaidTeams.THEATRE_OF_BLOOD, new int[]{
+			VarbitID.TOB_CLIENT_P0, VarbitID.TOB_CLIENT_P1, VarbitID.TOB_CLIENT_P2, VarbitID.TOB_CLIENT_P3,
+			VarbitID.TOB_CLIENT_P4},
+		RaidTeams.TOMBS_OF_AMASCUT, new int[]{
+			VarbitID.TOA_CLIENT_P0, VarbitID.TOA_CLIENT_P1, VarbitID.TOA_CLIENT_P2, VarbitID.TOA_CLIENT_P3,
+			VarbitID.TOA_CLIENT_P4, VarbitID.TOA_CLIENT_P5, VarbitID.TOA_CLIENT_P6, VarbitID.TOA_CLIENT_P7},
+		FracturedArchive.LOOT_SOURCE, new int[]{
+			VarbitID.TFA_CLIENT_P0, VarbitID.TFA_CLIENT_P1, VarbitID.TFA_CLIENT_P2, VarbitID.TFA_CLIENT_P3,
+			VarbitID.TFA_CLIENT_P4, VarbitID.TFA_CLIENT_P5, VarbitID.TFA_CLIENT_P6, VarbitID.TFA_CLIENT_P7});
+
 	// How often stale gear snapshots and fight starts are dropped
 	private static final int PRUNE_INTERVAL_TICKS = 100;
+
+	// Skilling bosses: the players around are a crowd, not a team, so no team size is sent
+	private static final Set<String> NO_TEAM = Set.of("Wintertodt", "Tempoross", "Zalcano");
 
 	// "Total duration: @mes_hl_red@2:03.00</col>", sent right after the delve level duration
 	private static final Pattern DOOM_TOTAL_DURATION_PATTERN = Pattern.compile(
@@ -196,9 +216,27 @@ public class PostiePetePlugin extends Plugin
 
 	private final TickHistory<PlayerItems> gearHistory = new TickHistory<>();
 	private final FightStarts fightStarts = new FightStarts();
+	private final NearbyPlayers nearbyPlayers = new NearbyPlayers();
+
+	// The other players in the scene, from their spawn and despawn events
+	private final Set<Player> scenePlayers = new HashSet<>();
+	private final RaidTeams raidTeams = new RaidTeams();
 
 	// Set when the player's items change, so the gear history gets a snapshot on the next tick
 	private boolean gearChanged;
+
+	// Each raid's party size over time, by chest name, so a raid's team is its party at the raid's start: the
+	// same moment the gear is taken from
+	private final Map<String, TickHistory<Integer>> partySizes = new HashMap<>();
+	{
+		for (String raid : RAID_PARTY_SLOTS.keySet())
+		{
+			partySizes.put(raid, new TickHistory<>());
+		}
+	}
+
+	// Set when a party slot changes, so the party size histories get a snapshot on the next tick
+	private boolean partyChanged;
 
 	private final KillCounts killCounts = new KillCounts(KILL_TIME_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS,
 		KILL_WITHOUT_LOOT_TICKS);
@@ -220,12 +258,21 @@ public class PostiePetePlugin extends Plugin
 		// Turned on while already logged in: no login to wait for
 		lootTrackerChecked = false;
 		gearChanged = true;
+		partyChanged = true;
 		clientThread.invokeLater(() ->
 		{
 			if (client.getGameState() == GameState.LOGGED_IN)
 			{
 				lootTrackerChecked = true;
 				warnIfLootTrackerOff();
+				// The players already in view, which won't get spawn events
+				for (Player player : client.getTopLevelWorldView().players())
+				{
+					if (player != client.getLocalPlayer())
+					{
+						scenePlayers.add(player);
+					}
+				}
 			}
 		});
 		log.debug("Postie Pete started!");
@@ -245,7 +292,12 @@ public class PostiePetePlugin extends Plugin
 		killCounts.reset();
 		gearHistory.reset();
 		fightStarts.reset();
+		nearbyPlayers.reset();
+		scenePlayers.clear();
+		raidTeams.reset();
+		partySizes.values().forEach(TickHistory::reset);
 		gearChanged = false;
+		partyChanged = false;
 		collectionLogReady = false;
 		lastCollectionLogItemId = 0;
 		log.debug("Postie Pete stopped!");
@@ -338,14 +390,37 @@ public class PostiePetePlugin extends Plugin
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
 
+		// Raids have the game's party size: the party at the raid's start (the moment the gear is from), or else
+		// the size read when the raid was completed (CoX's comes from its completion message)
+		boolean raidChest = event.getName() != null && event.getName().equals(RaidTeams.chestName(event.getName()));
+		Integer raidSize = raidChest ? raidTeams.takeSize(event.getName()) : null;
+		if (raidChest)
+		{
+			Integer partyAtStart = partySizeAt(event.getName(), firstKnown(runStart, fightTimeStart, firstHit));
+			if (partyAtStart != null)
+			{
+				raidSize = partyAtStart;
+			}
+		}
+		bossKill |= raidChest;
+
 		if (!config.sendLoot())
 		{
 			return;
 		}
 
 		PlayerItems gear = bossKill ? gearAtStart(runStart, fightTimeStart, firstHit) : null;
+		LootEvent.Team team;
+		if (raidChest)
+		{
+			team = raidSize != null ? new LootEvent.Team(raidSize) : null;
+		}
+		else
+		{
+			team = bossKill ? teamFor(kill != null ? kill.getName() : null, firstKnown(runStart, fightTimeStart, firstHit), tick) : null;
+		}
 		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(event.getName(), kill, null, completionTime, wave),
-			raid, toDrops(event.getItems()), gear, run != null ? run.getWaves() : null));
+			raid, toDrops(event.getItems()), gear, run != null ? run.getWaves() : null, team));
 	}
 
 	private void onNpcLoot(Player localPlayer, LootReceived event)
@@ -364,9 +439,10 @@ public class PostiePetePlugin extends Plugin
 
 		// Only kills with a kill count message are boss kills
 		PlayerItems gear = kill != null ? gearAtStart(null, fightTimeStart, firstHit) : null;
+		LootEvent.Team team = kill != null ? teamFor(kill.getName(), firstKnown(fightTimeStart, firstHit), tick) : null;
 		postEvent(new LootEvent(common(localPlayer),
 			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null),
-			null, toDrops(event.getItems()), gear, null));
+			null, toDrops(event.getItems()), gear, null, team));
 	}
 
 	/**
@@ -396,7 +472,10 @@ public class PostiePetePlugin extends Plugin
 			collectionLogReady = false;
 			// Game ticks before and after aren't comparable, and the account can change
 			gearHistory.reset();
+			partySizes.values().forEach(TickHistory::reset);
 			fightStarts.reset();
+			nearbyPlayers.reset();
+			scenePlayers.clear();
 			colosseum.onLogout();
 			doom.onLogout();
 			fightCaves.onLogout();
@@ -406,6 +485,7 @@ public class PostiePetePlugin extends Plugin
 		else if (state == GameState.LOGGED_IN)
 		{
 			gearChanged = true;
+			partyChanged = true;
 		}
 
 		// The Loot Tracker warning shows once per login, so a hop doesn't repeat it
@@ -441,10 +521,21 @@ public class PostiePetePlugin extends Plugin
 			gearChanged = false;
 			gearHistory.record(tick, capturePlayerItems());
 		}
+		if (partyChanged && client.getGameState() == GameState.LOGGED_IN)
+		{
+			partyChanged = false;
+			for (Map.Entry<String, TickHistory<Integer>> raid : partySizes.entrySet())
+			{
+				raid.getValue().record(tick, occupiedPartySlots(raid.getKey()));
+			}
+		}
+		recordNearbyPlayers(tick);
 		if (tick % PRUNE_INTERVAL_TICKS == 0)
 		{
 			gearHistory.prune(tick);
+			partySizes.values().forEach(history -> history.prune(tick));
 			fightStarts.prune(tick);
+			nearbyPlayers.prune(tick);
 		}
 
 		LootEvent.Kill killWithoutLoot = killCounts.takeKillWithoutLoot(client.getTickCount());
@@ -481,9 +572,145 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		PlayerItems gear = gearAtStart(run != null ? run.getStartTick() : null, fightTimeStart, firstHit);
+		Integer runStart = run != null ? run.getStartTick() : null;
+		PlayerItems gear = gearAtStart(runStart, fightTimeStart, firstHit);
+		LootEvent.Team team = teamFor(kill.getName(), firstKnown(runStart, fightTimeStart, firstHit), client.getTickCount());
 		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(null, kill, null, killTime, null),
-			null, Collections.emptyList(), gear, run != null ? run.getWaves() : null));
+			null, Collections.emptyList(), gear, run != null ? run.getWaves() : null, team));
+	}
+
+	/**
+	 * Whether the kill count name is a skilling boss's, whose crowd isn't a team.
+	 */
+	private static boolean isSkillingBoss(String killName)
+	{
+		return NO_TEAM.stream().anyMatch(name -> name.equalsIgnoreCase(killName));
+	}
+
+	/**
+	 * The team for a boss kill other than a raid: the player plus every other player who was near them at some
+	 * point between the fight's start and the kill, or in the last {@link FightStarts#STALE_TICKS} if the start
+	 * isn't known. Null for skilling bosses, whose crowd isn't a team.
+	 */
+	private LootEvent.Team teamFor(String killName, Integer fightStartTick, int tick)
+	{
+		if (killName != null && isSkillingBoss(killName))
+		{
+			return null;
+		}
+		int from = fightStartTick != null ? fightStartTick : tick - FightStarts.STALE_TICKS;
+		return new LootEvent.Team(1 + nearbyPlayers.count(from, tick));
+	}
+
+	/**
+	 * The first tick that is known, or null.
+	 */
+	private static Integer firstKnown(Integer... ticks)
+	{
+		for (Integer tick : ticks)
+		{
+			if (tick != null)
+			{
+				return tick;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The game's party size for a raid right now, from its party slots, or null if it has none or none are in use.
+	 */
+	private Integer raidPartySize(String chestName)
+	{
+		int size = occupiedPartySlots(chestName);
+		return size > 0 ? size : null;
+	}
+
+	/**
+	 * How many of the raid's party slots are in use right now, or 0 for a raid without party slots.
+	 */
+	private int occupiedPartySlots(String chestName)
+	{
+		int[] slots = RAID_PARTY_SLOTS.get(chestName);
+		if (slots == null)
+		{
+			return 0;
+		}
+		int[] values = new int[slots.length];
+		for (int i = 0; i < slots.length; i++)
+		{
+			values[i] = client.getVarbitValue(slots[i]);
+		}
+		return RaidTeams.occupiedSlots(values);
+	}
+
+	/**
+	 * The raid's party size on the tick (e.g. its start), from the party size history, or null if it isn't known
+	 * or no party was in the slots then.
+	 */
+	private Integer partySizeAt(String chestName, Integer tick)
+	{
+		TickHistory<Integer> history = partySizes.get(chestName);
+		Integer size = history != null && tick != null ? history.at(tick) : null;
+		return size != null && size > 0 ? size : null;
+	}
+
+	/**
+	 * Whether the varbit is one of a raid's party slots.
+	 */
+	private static boolean isPartySlot(int varbitId)
+	{
+		for (int[] slots : RAID_PARTY_SLOTS.values())
+		{
+			for (int slot : slots)
+			{
+				if (slot == varbitId)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Keeps the other players in the scene, so the ones near the player can be found without scanning the scene.
+	 */
+	@Subscribe
+	public void onPlayerSpawned(PlayerSpawned event)
+	{
+		if (event.getPlayer() != client.getLocalPlayer())
+		{
+			scenePlayers.add(event.getPlayer());
+		}
+	}
+
+	@Subscribe
+	public void onPlayerDespawned(PlayerDespawned event)
+	{
+		scenePlayers.remove(event.getPlayer());
+	}
+
+	/**
+	 * Records the other players within {@link NearbyPlayers#RADIUS_TILES} of the player, while a fight is going on
+	 * (a hit in the last {@link FightStarts#STALE_TICKS}), to count the team of a kill.
+	 */
+	private void recordNearbyPlayers(int tick)
+	{
+		Player localPlayer = client.getLocalPlayer();
+		if (localPlayer == null || scenePlayers.isEmpty() || fightStarts.current(tick) == null)
+		{
+			return;
+		}
+
+		WorldPoint here = localPlayer.getWorldLocation();
+		for (Player player : scenePlayers)
+		{
+			if (player.getWorldLocation().distanceTo(here) <= NearbyPlayers.RADIUS_TILES)
+			{
+				nearbyPlayers.onNear(player.getName(), tick);
+			}
+		}
 	}
 
 	/**
@@ -556,6 +783,11 @@ public class PostiePetePlugin extends Plugin
 		if (isGearVar(event))
 		{
 			gearChanged = true;
+			return;
+		}
+		if (event.getVarbitId() != -1 && isPartySlot(event.getVarbitId()))
+		{
+			partyChanged = true;
 			return;
 		}
 
@@ -647,12 +879,20 @@ public class PostiePetePlugin extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
+		int tick = client.getTickCount();
+
+		// The Chambers of Xeric tells its party when the raid is completed, with the team size
+		if (event.getType() == ChatMessageType.FRIENDSCHATNOTIFICATION)
+		{
+			onRaidPartyMessage(Text.removeTags(event.getMessage()));
+			return;
+		}
+
 		if (event.getType() != ChatMessageType.GAMEMESSAGE && event.getType() != ChatMessageType.SPAM)
 		{
 			return;
 		}
 
-		int tick = client.getTickCount();
 		Matcher matcher = COLOSSEUM_WAVE_PATTERN.matcher(event.getMessage());
 		if (matcher.lookingAt())
 		{
@@ -741,6 +981,10 @@ public class PostiePetePlugin extends Plugin
 			{
 				inferno.finish(tick);
 			}
+
+			// A raid's completion: its party is still in the slots, the chest is opened later
+			String raidChest = RaidTeams.chestName(killCount.getName());
+			raidTeams.onCompleted(raidChest, raidPartySize(raidChest));
 		}
 
 		Player localPlayer = client.getLocalPlayer();
@@ -762,6 +1006,24 @@ public class PostiePetePlugin extends Plugin
 			String id = matcher.group("id");
 			postEvent(new CombatAchievementEvent(common(localPlayer),
 				matcher.group("tier").toLowerCase(), matcher.group("task"), id == null ? null : Integer.valueOf(id)));
+		}
+	}
+
+	/**
+	 * A message to the raid's party, tags removed: the Chambers of Xeric's completion with the team size. Falls
+	 * back to the party size the game keeps if the message shows none.
+	 */
+	private void onRaidPartyMessage(String message)
+	{
+		if (message.startsWith(RaidTeams.COX_COMPLETE_MESSAGE))
+		{
+			Integer size = RaidTeams.coxTeamSize(message);
+			if (size == null)
+			{
+				size = client.getVarbitValue(VarbitID.RAIDS_CLIENT_PARTYSIZE);
+			}
+			log.debug("Chambers of Xeric completed, team size {}", size);
+			raidTeams.onCompleted(RaidTeams.CHAMBERS_OF_XERIC, size);
 		}
 	}
 

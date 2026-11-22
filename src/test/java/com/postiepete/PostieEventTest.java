@@ -31,9 +31,9 @@ public class PostieEventTest
 		JsonObject json = toJson(new LootEvent(COMMON,
 			LootEvent.Source.of("Mad Angel", new LootEvent.Kill("Mad Angel", 212), 16305,
 				new LootEvent.KillTime(48.6, 41.2, false), null),
-			null, Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450)), null, null));
+			null, Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450)), null, null, null));
 
-		assertEquals(with(COMMON_FIELDS, "source", "raid", "drops", "playerItems", "waves"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "source", "raid", "drops", "playerItems", "waves", "team"), json.keySet());
 		assertEquals("loot", json.get("eventType").getAsString());
 		assertEquals("ExamplePlayer", json.get("rsn").getAsString());
 		JsonObject source = json.getAsJsonObject("source");
@@ -50,6 +50,7 @@ public class PostieEventTest
 		assertEquals(true, json.get("raid").isJsonNull());
 		assertEquals(true, json.get("playerItems").isJsonNull());
 		assertEquals(true, json.get("waves").isJsonNull());
+		assertEquals(true, json.get("team").isJsonNull());
 		JsonObject drop = json.getAsJsonArray("drops").get(0).getAsJsonObject();
 		assertEquals(set("itemId", "itemName", "quantity", "value"), drop.keySet());
 		assertEquals(536, drop.get("itemId").getAsInt());
@@ -65,7 +66,11 @@ public class PostieEventTest
 		JsonObject json = toJson(new LootEvent(COMMON,
 			LootEvent.Source.of("Fractured Archive", new LootEvent.Kill("Fractured Archive", 75), null,
 				new LootEvent.KillTime(1534.2, 1534.2, true), null),
-			raid, Collections.emptyList(), null, null));
+			raid, Collections.emptyList(), null, null, new LootEvent.Team(3)));
+
+		JsonObject team = json.getAsJsonObject("team");
+		assertEquals(set("size"), team.keySet());
+		assertEquals(3, team.get("size").getAsInt());
 
 		JsonObject raidJson = json.getAsJsonObject("raid");
 		assertEquals(set("splits"), raidJson.keySet());
@@ -88,7 +93,7 @@ public class PostieEventTest
 		List<LootEvent.Wave> waves = Arrays.asList(new LootEvent.Wave(1, 34.2), new LootEvent.Wave(2, 69.6));
 
 		JsonObject json = toJson(new LootEvent(COMMON,
-			LootEvent.Source.of("Fortis Colosseum", null, null, null, 2), null, Collections.emptyList(), gear, waves));
+			LootEvent.Source.of("Fortis Colosseum", null, null, null, 2), null, Collections.emptyList(), gear, waves, new LootEvent.Team(1)));
 
 		JsonObject items = json.getAsJsonObject("playerItems");
 		assertEquals(set("capturedAt", "equipment", "inventory", "rune_pouch", "quiver"), items.keySet());
