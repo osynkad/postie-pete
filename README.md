@@ -23,6 +23,7 @@ Any `2xx` response counts as success. Failed requests are not retried.
 | --- | --- | --- |
 | **Endpoint URLs** | empty | Full URLs that events are POSTed to, separated by commas. Nothing is sent while it is empty. |
 | **Loot** › **Send event** | on | Send `loot` events. |
+| **Loot** › **Send gear** | on | Send your equipment, inventory, rune pouch and quiver from the start of the fight with boss kills, as [`playerItems`](#player-items). When off, `playerItems` is always `null`. |
 | **Collection log** › **Send event** | on | Send `collection_log` events. |
 | **Combat achievements** › **Send event** | on | Send `combat_achievement` events. |
 
@@ -54,6 +55,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | `source` | object | What the loot came from: see [Source](#source). |
 | `raid` | object \| null | Raid reward chests only (currently the Fractured Archive): see [Raid](#raid). `null` for all other loot. |
 | `drops` | array | The loot received, as a list of `{ "itemId": number, "itemName": string, "quantity": number, "value": number }`. `itemName` comes from the game's item data and isn't unique, so use `itemId` as the key. `value` is the GE value of **one** item when the drop happened, from the OSRS Wiki real-time prices that RuneLite loads (regardless of the player's "Use wiki item prices" setting). Multiply by `quantity` for the stack value. Untradeable variants that RuneLite maps to a tradeable item (e.g. Sanguine Torva → Torva, noted → unnoted) get that item's value. Other untradeable items are `0`, as is any item if RuneLite hasn't loaded prices yet. Coins are `1` and platinum tokens `1000`. |
+| `playerItems` | object \| null | Boss kills only: your items when the fight started. See [Player items](#player-items). `null` for other loot, and when **Send gear** is off. |
 
 #### Source
 
@@ -78,6 +80,20 @@ A few kills come with no loot at the kill: the **Inferno** and the **Fight Caves
 | --- | --- | --- |
 | `splits` | array | Each boss's time in the order fought, as `{ "boss": string, "duration": number }` with the boss as the game names it (e.g. `"Bork"`) and seconds. For the Fractured Archive the 2nd to 4th boss are the path picked. Empty when none were seen (e.g. the plugin was turned on mid-raid). |
 
+#### Player items
+
+Sent with boss kills: loot or a kill with no loot that came with a kill count message, and every Fortis Colosseum, Doom of Mokhaiotl and Fractured Archive chest. Regular NPC drops, clue caskets, reward carts etc. have `playerItems: null`.
+
+The items are the ones you had when the fight started, not when the loot arrived, so supplies used during the fight are still there. Each kill of a respawning boss (e.g. Vorkath, GWD generals) has its own start.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `capturedAt` | string | How the fight's start was found, tried in this order: `"runStart"` (the start of a Fractured Archive run: its first boss), `"fightTime"` (the kill time the game printed, counted back from the kill), `"firstHit"` (your first landed hit on the boss, for bosses the game prints no time for; for Barrows, your first hit on the first brother) or `"kill"` (none of these was known, e.g. the plugin was turned on mid-fight, so the items are from when the loot arrived). |
+| `equipment` | object | Worn items keyed by slot: `"HEAD"`, `"CAPE"`, `"AMULET"`, `"WEAPON"`, `"BODY"`, `"SHIELD"`, `"LEGS"`, `"GLOVES"`, `"BOOTS"`, `"RING"`, `"AMMO"`. Each value is `{ "id": number, "quantity": number }`. Empty slots are left out. |
+| `inventory` | object | Inventory items keyed by slot index, `"0"` to `"27"`, as `{ "id": number, "quantity": number }`. Empty slots are left out. |
+| `rune_pouch` | array \| null | The runes in the rune pouch, as `{ "id": number, "quantity": number }`, or `null` if it is empty. The game keeps this even when no pouch is carried, so check the inventory for a rune pouch. |
+| `quiver` | object \| null | The ammo in Dizana's quiver, as `{ "id": number, "quantity": number }`, or `null` if empty. The game keeps this even when no quiver is worn, so check the cape. |
+
 ```json
 {
   "eventType": "loot",
@@ -98,11 +114,25 @@ A few kills come with no loot at the kill: the **Inferno** and the **Fight Caves
   "drops": [
     { "itemId": 536, "itemName": "Dragon bones", "quantity": 2, "value": 2450 },
     { "itemId": 995, "itemName": "Coins", "quantity": 15000, "value": 1 }
-  ]
+  ],
+  "playerItems": {
+    "capturedAt": "fightTime",
+    "equipment": {
+      "HEAD": { "id": 11826, "quantity": 1 },
+      "WEAPON": { "id": 20997, "quantity": 1 },
+      "AMMO": { "id": 11212, "quantity": 1200 }
+    },
+    "inventory": {
+      "0": { "id": 12926, "quantity": 1 },
+      "1": { "id": 12791, "quantity": 1 },
+      "2": { "id": 6685, "quantity": 1 }
+    },
+    "rune_pouch": [{ "id": 560, "quantity": 3000 }, { "id": 565, "quantity": 1500 }],
+    "quiver": null
+  }
 }
 ```
 
-A Fractured Archive chest:
 
 ```json
 {
@@ -131,7 +161,14 @@ A Fractured Archive chest:
   },
   "drops": [
     { "itemId": 995, "itemName": "Coins", "quantity": 50000, "value": 1 }
-  ]
+  ],
+  "playerItems": {
+    "capturedAt": "runStart",
+    "equipment": { "WEAPON": { "id": 4151, "quantity": 1 } },
+    "inventory": {},
+    "rune_pouch": null,
+    "quiver": null
+  }
 }
 ```
 

@@ -19,12 +19,19 @@ class LootEvent extends PostieEvent
 	final Raid raid;
 	final List<Drop> drops;
 
-	LootEvent(Common common, Source source, Raid raid, List<Drop> drops)
+	/**
+	 * The player's items when the fight started, for boss kills. Null for other loot, or when sending gear is
+	 * turned off.
+	 */
+	final PlayerItems playerItems;
+
+	LootEvent(Common common, Source source, Raid raid, List<Drop> drops, PlayerItems playerItems)
 	{
 		super(LOOT, common);
 		this.source = source;
 		this.raid = raid;
 		this.drops = drops;
+		this.playerItems = playerItems;
 	}
 
 	@Value

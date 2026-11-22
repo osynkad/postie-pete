@@ -7,7 +7,9 @@ import com.google.gson.JsonObject;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
 
@@ -29,9 +31,9 @@ public class PostieEventTest
 		JsonObject json = toJson(new LootEvent(COMMON,
 			LootEvent.Source.of("Mad Angel", new LootEvent.Kill("Mad Angel", 212), 16305,
 				new LootEvent.KillTime(48.6, 41.2, false), null),
-			null, Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450))));
+			null, Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450)), null));
 
-		assertEquals(with(COMMON_FIELDS, "source", "raid", "drops"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "source", "raid", "drops", "playerItems"), json.keySet());
 		assertEquals("loot", json.get("eventType").getAsString());
 		assertEquals("ExamplePlayer", json.get("rsn").getAsString());
 		JsonObject source = json.getAsJsonObject("source");
@@ -46,6 +48,7 @@ public class PostieEventTest
 		assertEquals(false, source.get("newPersonalBest").getAsBoolean());
 		assertEquals(true, source.get("wave").isJsonNull());
 		assertEquals(true, json.get("raid").isJsonNull());
+		assertEquals(true, json.get("playerItems").isJsonNull());
 		JsonObject drop = json.getAsJsonArray("drops").get(0).getAsJsonObject();
 		assertEquals(set("itemId", "itemName", "quantity", "value"), drop.keySet());
 		assertEquals(536, drop.get("itemId").getAsInt());
@@ -61,7 +64,7 @@ public class PostieEventTest
 		JsonObject json = toJson(new LootEvent(COMMON,
 			LootEvent.Source.of("Fractured Archive", new LootEvent.Kill("Fractured Archive", 75), null,
 				new LootEvent.KillTime(1534.2, 1534.2, true), null),
-			raid, Collections.emptyList()));
+			raid, Collections.emptyList(), null));
 
 		JsonObject raidJson = json.getAsJsonObject("raid");
 		assertEquals(set("splits"), raidJson.keySet());
@@ -69,6 +72,39 @@ public class PostieEventTest
 		assertEquals(set("boss", "duration"), split.keySet());
 		assertEquals("Ezekiel", split.get("boss").getAsString());
 		assertEquals(141.6, split.get("duration").getAsDouble(), 0);
+	}
+
+	@Test
+	public void bossKillSendsGear()
+	{
+		Map<String, PlayerItems.SlotItem> equipment = new LinkedHashMap<>();
+		equipment.put("WEAPON", new PlayerItems.SlotItem(20997, 1));
+		Map<String, PlayerItems.SlotItem> inventory = new LinkedHashMap<>();
+		inventory.put("0", new PlayerItems.SlotItem(12926, 1));
+		PlayerItems gear = new PlayerItems(null, equipment, inventory,
+			Collections.singletonList(new PlayerItems.SlotItem(560, 3000)), null)
+			.withCapturedAt(PlayerItems.CapturedAt.RUN_START);
+		JsonObject json = toJson(new LootEvent(COMMON,
+			LootEvent.Source.of("Fortis Colosseum", null, null, null, 2), null, Collections.emptyList(), gear));
+
+		JsonObject items = json.getAsJsonObject("playerItems");
+		assertEquals(set("capturedAt", "equipment", "inventory", "rune_pouch", "quiver"), items.keySet());
+		assertEquals("runStart", items.get("capturedAt").getAsString());
+		JsonObject weapon = items.getAsJsonObject("equipment").getAsJsonObject("WEAPON");
+		assertEquals(set("id", "quantity"), weapon.keySet());
+		assertEquals(20997, weapon.get("id").getAsInt());
+		assertEquals(12926, items.getAsJsonObject("inventory").getAsJsonObject("0").get("id").getAsInt());
+		assertEquals(3000, items.getAsJsonArray("rune_pouch").get(0).getAsJsonObject().get("quantity").getAsInt());
+		assertEquals(true, items.get("quiver").isJsonNull());
+	}
+
+	@Test
+	public void everyCapturedAtHasItsName()
+	{
+		assertEquals("\"runStart\"", GSON.toJson(PlayerItems.CapturedAt.RUN_START));
+		assertEquals("\"fightTime\"", GSON.toJson(PlayerItems.CapturedAt.FIGHT_TIME));
+		assertEquals("\"firstHit\"", GSON.toJson(PlayerItems.CapturedAt.FIRST_HIT));
+		assertEquals("\"kill\"", GSON.toJson(PlayerItems.CapturedAt.KILL));
 	}
 
 	@Test

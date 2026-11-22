@@ -8,6 +8,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -19,13 +20,23 @@ import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.EnumComposition;
+import net.runelite.api.EnumID;
+import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
+import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
+import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.VarbitChanged;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -77,6 +88,24 @@ public class PostiePetePlugin extends Plugin
 	// "Delve level: 2 duration: @mes_hl_red@1:19.80</col>. Personal best: ..." (Doom of Mokhaiotl). Levels past 8
 	// show the real level in brackets: "Delve level: 8+ (22) duration: 1:08.4. Personal best: 0:54.0" (seen in game).
 	static final Pattern DOOM_LEVEL_PATTERN = Pattern.compile("Delve level: (?<level>\\d+)\\+?(?: \\((?<deep>\\d+)\\))? duration:");
+
+	// Regular rune pouch uses the first 3 slots, divine rune pouch uses all 4
+	private static final int[] RUNE_POUCH_TYPE_VARBITS = {
+		VarbitID.RUNE_POUCH_TYPE_1,
+		VarbitID.RUNE_POUCH_TYPE_2,
+		VarbitID.RUNE_POUCH_TYPE_3,
+		VarbitID.RUNE_POUCH_TYPE_4
+	};
+
+	private static final int[] RUNE_POUCH_QUANTITY_VARBITS = {
+		VarbitID.RUNE_POUCH_QUANTITY_1,
+		VarbitID.RUNE_POUCH_QUANTITY_2,
+		VarbitID.RUNE_POUCH_QUANTITY_3,
+		VarbitID.RUNE_POUCH_QUANTITY_4
+	};
+
+	// How often stale gear snapshots and fight starts are dropped
+	private static final int PRUNE_INTERVAL_TICKS = 100;
 
 	// "Total duration: @mes_hl_red@2:03.00</col>", sent right after the delve level duration
 	private static final Pattern DOOM_TOTAL_DURATION_PATTERN = Pattern.compile(
@@ -144,6 +173,12 @@ public class PostiePetePlugin extends Plugin
 
 	private final FracturedArchive fracturedArchive = new FracturedArchive();
 
+	private final TickHistory<PlayerItems> gearHistory = new TickHistory<>();
+	private final FightStarts fightStarts = new FightStarts();
+
+	// Set when the player's items change, so the gear history gets a snapshot on the next tick
+	private boolean gearChanged;
+
 	private final KillCounts killCounts = new KillCounts(KILL_TIME_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS,
 		KILL_WITHOUT_LOOT_TICKS);
 
@@ -163,6 +198,7 @@ public class PostiePetePlugin extends Plugin
 		gson = baseGson.newBuilder().serializeNulls().create();
 		// Turned on while already logged in: no login to wait for
 		lootTrackerChecked = false;
+		gearChanged = true;
 		clientThread.invokeLater(() ->
 		{
 			if (client.getGameState() == GameState.LOGGED_IN)
@@ -183,6 +219,9 @@ public class PostiePetePlugin extends Plugin
 		doomFullRunDuration = null;
 		fracturedArchive.reset();
 		killCounts.reset();
+		gearHistory.reset();
+		fightStarts.reset();
+		gearChanged = false;
 		collectionLogReady = false;
 		lastCollectionLogItemId = 0;
 		log.debug("Postie Pete stopped!");
@@ -217,10 +256,16 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		int tick = client.getTickCount();
 		LootEvent.KillTime completionTime = consumeKillTime(CHEST_TIME_MAX_AGE_TICKS);
-		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), client.getTickCount());
+		Integer fightTimeStart = fightStartTick(completionTime);
+		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), tick);
+		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
 		Integer wave = null;
 		LootEvent.Raid raid = null;
+		Integer runStart = null;
+		// Chests with a kill count message are boss kills, and so are these activities' chests without one
+		boolean bossKill = kill != null;
 
 		// Loot can be claimed after any wave / delve level. Send how far the run got, and a duration
 		// only for a full run. A full Colosseum run's time and personal best come from the game's "Colosseum
@@ -231,7 +276,7 @@ public class PostiePetePlugin extends Plugin
 			wave = lastColosseumWave;
 			// A full run's kill count message is Sol Heredit's. The loot keeps the Colosseum's name, so full and
 			// partial runs stay one source.
-			LootEvent.Kill solHeredit = killCounts.claimForChest(SOL_HEREDIT, client.getTickCount());
+			LootEvent.Kill solHeredit = killCounts.claimForChest(SOL_HEREDIT, tick);
 			if (solHeredit != null)
 			{
 				kill = new LootEvent.Kill(COLOSSEUM, solHeredit.getCount());
@@ -244,16 +289,20 @@ public class PostiePetePlugin extends Plugin
 			{
 				completionTime = withoutPersonalBest(ticksToSeconds(client.getVarpValue(VarPlayerID.COLOSSEUM_TOTAL_DURATION)));
 			}
+			bossKill = true;
 		}
 		else if (DOOM_OF_MOKHAIOTL.equals(event.getName()))
 		{
 			// The Loot Tracker passes the delve level as metadata
 			wave = event.getMetadata() instanceof Integer ? (Integer) event.getMetadata() : null;
 			completionTime = wave != null && wave >= DOOM_FULL_RUN_LEVELS ? withoutPersonalBest(doomFullRunDuration) : null;
+			bossKill = true;
 		}
 		else if (FracturedArchive.LOOT_SOURCE.equals(event.getName()))
 		{
+			runStart = fracturedArchive.startTick();
 			raid = fracturedArchive.consumeRaid();
+			bossKill = true;
 		}
 		lastColosseumWave = null;
 		lastDoomLevel = null;
@@ -264,24 +313,30 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		PlayerItems gear = bossKill ? gearAtStart(runStart, fightTimeStart, firstHit) : null;
 		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(event.getName(), kill, null, completionTime, wave),
-			raid, toDrops(event.getItems())));
+			raid, toDrops(event.getItems()), gear));
 	}
 
 	private void onNpcLoot(Player localPlayer, LootReceived event)
 	{
 		// Consumed even when loot isn't sent, so it can't be attached to a later kill
+		int tick = client.getTickCount();
 		LootEvent.KillTime killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
-		LootEvent.Kill kill = killCounts.claimForNpcLoot(client.getTickCount());
-		log.debug("NPC loot: {} (tick {}), kill count {}", event.getName(), client.getTickCount(), kill);
+		Integer fightTimeStart = fightStartTick(killTime);
+		LootEvent.Kill kill = killCounts.claimForNpcLoot(tick);
+		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
+		log.debug("NPC loot: {} (tick {}), kill count {}", event.getName(), tick, kill);
 		if (!config.sendLoot())
 		{
 			return;
 		}
 
+		// Only kills with a kill count message are boss kills
+		PlayerItems gear = kill != null ? gearAtStart(null, fightTimeStart, firstHit) : null;
 		postEvent(new LootEvent(common(localPlayer),
 			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null),
-			null, toDrops(event.getItems())));
+			null, toDrops(event.getItems()), gear));
 	}
 
 	/**
@@ -309,6 +364,14 @@ public class PostiePetePlugin extends Plugin
 		if (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING || state == GameState.CONNECTION_LOST)
 		{
 			collectionLogReady = false;
+			// Game ticks before and after aren't comparable, and the account can change
+			gearHistory.reset();
+			fightStarts.reset();
+			fracturedArchive.onLogout();
+		}
+		else if (state == GameState.LOGGED_IN)
+		{
+			gearChanged = true;
 		}
 
 		// The Loot Tracker warning shows once per login, so a hop doesn't repeat it
@@ -338,6 +401,18 @@ public class PostiePetePlugin extends Plugin
 			log.debug("Collection log baseline: {}", lastCollectionLogItemId);
 		}
 
+		int tick = client.getTickCount();
+		if (gearChanged && client.getGameState() == GameState.LOGGED_IN)
+		{
+			gearChanged = false;
+			gearHistory.record(tick, capturePlayerItems());
+		}
+		if (tick % PRUNE_INTERVAL_TICKS == 0)
+		{
+			gearHistory.prune(tick);
+			fightStarts.prune(tick);
+		}
+
 		LootEvent.Kill killWithoutLoot = killCounts.takeKillWithoutLoot(client.getTickCount());
 		if (killWithoutLoot != null)
 		{
@@ -351,8 +426,11 @@ public class PostiePetePlugin extends Plugin
 	 */
 	private void onKillWithoutLoot(LootEvent.Kill kill)
 	{
-		// Consumed even when loot isn't sent, so it can't be attached to a later kill
+		// Consumed even when loot isn't sent, so they can't be attached to a later kill
 		LootEvent.KillTime killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		Integer fightTimeStart = fightStartTick(killTime);
+		Integer firstHit = fightStarts.take(kill.getName(), client.getTickCount());
+
 		Player localPlayer = client.getLocalPlayer();
 		log.debug("Kill without loot: {} {}, duration {}", kill.getName(), kill.getCount(), killTime);
 		if (localPlayer == null || !config.sendLoot())
@@ -360,13 +438,84 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		PlayerItems gear = gearAtStart(null, fightTimeStart, firstHit);
 		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(null, kill, null, killTime, null),
-			null, Collections.emptyList()));
+			null, Collections.emptyList(), gear));
+	}
+
+	/**
+	 * The player's items when the fight started, from the first start that is known and has a snapshot: the
+	 * run's start, then the kill time the game printed, then the first hit. Otherwise the items now. Null when
+	 * sending gear is turned off.
+	 */
+	private PlayerItems gearAtStart(Integer runStartTick, Integer fightTimeStartTick, Integer firstHitTick)
+	{
+		if (!config.sendGear())
+		{
+			return null;
+		}
+
+		PlayerItems items = runStartTick != null ? gearHistory.at(runStartTick) : null;
+		if (items != null)
+		{
+			return items.withCapturedAt(PlayerItems.CapturedAt.RUN_START);
+		}
+		items = fightTimeStartTick != null ? gearHistory.at(fightTimeStartTick) : null;
+		if (items != null)
+		{
+			return items.withCapturedAt(PlayerItems.CapturedAt.FIGHT_TIME);
+		}
+		items = firstHitTick != null ? gearHistory.at(firstHitTick) : null;
+		if (items != null)
+		{
+			return items.withCapturedAt(PlayerItems.CapturedAt.FIRST_HIT);
+		}
+		return capturePlayerItems().withCapturedAt(PlayerItems.CapturedAt.KILL);
+	}
+
+	/**
+	 * The tick the fight started, from a kill time just returned by {@link #consumeKillTime}: the tick its
+	 * message came on, less the time. Null if there is no kill time.
+	 */
+	private Integer fightStartTick(LootEvent.KillTime killTime)
+	{
+		// lastKillTimeTick is left as it was when the kill time was consumed
+		return killTime != null ? lastKillTimeTick - (int) Math.round(killTime.getDuration() / 0.6) : null;
+	}
+
+	/**
+	 * Counts the player's own hits on NPCs, so kills the game prints no time for know when their fight started.
+	 */
+	@Subscribe
+	public void onHitsplatApplied(HitsplatApplied event)
+	{
+		if (!event.getHitsplat().isMine() || !(event.getActor() instanceof NPC))
+		{
+			return;
+		}
+
+		NPC npc = (NPC) event.getActor();
+		fightStarts.onHit(FightStarts.key(npc.getId(), npc.getName()), client.getTickCount());
+	}
+
+	@Subscribe
+	public void onItemContainerChanged(ItemContainerChanged event)
+	{
+		if (event.getContainerId() == InventoryID.INV || event.getContainerId() == InventoryID.WORN)
+		{
+			gearChanged = true;
+		}
 	}
 
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
 	{
+		if (isGearVar(event))
+		{
+			gearChanged = true;
+			return;
+		}
+
 		if (event.getVarpId() != VarPlayerID.COLLECTION_OVERVIEW_LAST_ITEM0 || event.getVarbitId() != -1)
 		{
 			return;
@@ -392,6 +541,27 @@ public class PostiePetePlugin extends Plugin
 
 		String itemName = itemManager.getItemComposition(itemId).getName();
 		postEvent(new CollectionLogEvent(common(localPlayer), itemName, itemId));
+	}
+
+	/**
+	 * Whether the change is to the rune pouch or the quiver, which are part of the player's items.
+	 */
+	private static boolean isGearVar(VarbitChanged event)
+	{
+		int varbitId = event.getVarbitId();
+		if (varbitId == -1)
+		{
+			return event.getVarpId() == VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO
+				|| event.getVarpId() == VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO_AMOUNT;
+		}
+		for (int i = 0; i < RUNE_POUCH_TYPE_VARBITS.length; i++)
+		{
+			if (varbitId == RUNE_POUCH_TYPE_VARBITS[i] || varbitId == RUNE_POUCH_QUANTITY_VARBITS[i])
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -439,6 +609,7 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		int tick = client.getTickCount();
 		Matcher matcher = COLOSSEUM_WAVE_PATTERN.matcher(event.getMessage());
 		if (matcher.lookingAt())
 		{
@@ -473,7 +644,7 @@ public class PostiePetePlugin extends Plugin
 
 		if (message.equals(FracturedArchive.RUN_START_MESSAGE))
 		{
-			fracturedArchive.onRunStarted();
+			fracturedArchive.onRunStarted(tick);
 			return;
 		}
 
@@ -486,7 +657,6 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		int tick = client.getTickCount();
 		matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
 		if (matcher.find())
 		{
@@ -522,6 +692,83 @@ public class PostiePetePlugin extends Plugin
 			postEvent(new CombatAchievementEvent(common(localPlayer),
 				matcher.group("tier").toLowerCase(), matcher.group("task"), id == null ? null : Integer.valueOf(id)));
 		}
+	}
+
+	/**
+	 * The player's equipment, inventory, rune pouch and quiver right now.
+	 */
+	private PlayerItems capturePlayerItems()
+	{
+		Map<String, PlayerItems.SlotItem> equipment = new LinkedHashMap<>();
+		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
+		if (worn != null)
+		{
+			for (EquipmentInventorySlot slot : EquipmentInventorySlot.values())
+			{
+				Item item = worn.getItem(slot.getSlotIdx());
+				if (item != null && item.getId() > 0)
+				{
+					equipment.put(slot.name(), new PlayerItems.SlotItem(item.getId(), item.getQuantity()));
+				}
+			}
+		}
+
+		Map<String, PlayerItems.SlotItem> inventory = new LinkedHashMap<>();
+		ItemContainer inv = client.getItemContainer(InventoryID.INV);
+		if (inv != null)
+		{
+			Item[] items = inv.getItems();
+			for (int slot = 0; slot < items.length; slot++)
+			{
+				if (items[slot].getId() > 0)
+				{
+					inventory.put(String.valueOf(slot), new PlayerItems.SlotItem(items[slot].getId(), items[slot].getQuantity()));
+				}
+			}
+		}
+
+		return new PlayerItems(null, equipment, inventory, captureRunePouch(), captureQuiver());
+	}
+
+	/**
+	 * Raw contents of the extra ammo slot (Dizana's quiver / bolt pouch). The game retains this
+	 * even when no quiver is worn, so the API decides whether it applies based on the equipment.
+	 */
+	private PlayerItems.SlotItem captureQuiver()
+	{
+		int ammoId = client.getVarpValue(VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO);
+		int ammoQuantity = client.getVarpValue(VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO_AMOUNT);
+		if (ammoId <= 0 || ammoQuantity <= 0)
+		{
+			return null;
+		}
+		return new PlayerItems.SlotItem(ammoId, ammoQuantity);
+	}
+
+	/**
+	 * Raw contents of the rune pouch. The game retains this even when no pouch is carried,
+	 * so the API decides whether it applies based on the inventory. Null if the pouch is empty.
+	 */
+	private List<PlayerItems.SlotItem> captureRunePouch()
+	{
+		EnumComposition runeEnum = client.getEnum(EnumID.RUNEPOUCH_RUNE);
+		List<PlayerItems.SlotItem> runes = new ArrayList<>();
+		for (int i = 0; i < RUNE_POUCH_TYPE_VARBITS.length; i++)
+		{
+			int type = client.getVarbitValue(RUNE_POUCH_TYPE_VARBITS[i]);
+			int quantity = client.getVarbitValue(RUNE_POUCH_QUANTITY_VARBITS[i]);
+			if (type == 0 || quantity <= 0)
+			{
+				continue;
+			}
+
+			int runeId = runeEnum.getIntValue(type);
+			if (runeId > 0)
+			{
+				runes.add(new PlayerItems.SlotItem(runeId, quantity));
+			}
+		}
+		return runes.isEmpty() ? null : runes;
 	}
 
 	/**

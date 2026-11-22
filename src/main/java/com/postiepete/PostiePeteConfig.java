@@ -60,6 +60,18 @@ public interface PostiePeteConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "sendGear",
+		name = "Send gear",
+		description = "Send your equipment, inventory, rune pouch and quiver from the start of the fight with boss kills",
+		section = lootSection,
+		position = 1
+	)
+	default boolean sendGear()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "sendCollectionLog",
 		name = "Send event",
 		description = "Send a collection log event when a new item is added to your collection log",
