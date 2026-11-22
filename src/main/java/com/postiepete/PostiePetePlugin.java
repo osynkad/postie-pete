@@ -225,6 +225,9 @@ public class PostiePetePlugin extends Plugin
 	// Set when the player's items change, so the gear history gets a snapshot on the next tick
 	private boolean gearChanged;
 
+	// The last items captured, whose unchanged parts the next capture reuses
+	private PlayerItems lastCapturedItems;
+
 	// Each raid's party size over time, by chest name, so a raid's team is its party at the raid's start: the
 	// same moment the gear is taken from
 	private final Map<String, TickHistory<Integer>> partySizes = new HashMap<>();
@@ -291,6 +294,7 @@ public class PostiePetePlugin extends Plugin
 		fracturedArchive.reset();
 		killCounts.reset();
 		gearHistory.reset();
+		lastCapturedItems = null;
 		fightStarts.reset();
 		nearbyPlayers.reset();
 		scenePlayers.clear();
@@ -488,6 +492,7 @@ public class PostiePetePlugin extends Plugin
 			collectionLogReady = false;
 			// Game ticks before and after aren't comparable, and the account can change
 			gearHistory.reset();
+			lastCapturedItems = null;
 			partySizes.values().forEach(TickHistory::reset);
 			fightStarts.reset();
 			nearbyPlayers.reset();
@@ -1094,10 +1099,15 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * The player's equipment, inventory, rune pouch and quiver right now.
+	 * The player's equipment, inventory, rune pouch and quiver right now. Parts and items that are the same as
+	 * in the last capture are reused rather than copied, so a snapshot in the gear history only adds what changed
+	 * (e.g. one arrow fired only adds a new equipment map, whose unchanged items are shared too).
 	 */
 	private PlayerItems capturePlayerItems()
 	{
+		PlayerItems previous = lastCapturedItems;
+
+		Map<String, PlayerItems.SlotItem> previousEquipment = previous != null ? previous.getEquipment() : Collections.emptyMap();
 		Map<String, PlayerItems.SlotItem> equipment = new LinkedHashMap<>();
 		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
 		if (worn != null)
@@ -1107,11 +1117,13 @@ public class PostiePetePlugin extends Plugin
 				Item item = worn.getItem(slot.getSlotIdx());
 				if (item != null && item.getId() > 0)
 				{
-					equipment.put(slot.name(), new PlayerItems.SlotItem(item.getId(), item.getQuantity()));
+					equipment.put(slot.name(),
+						PlayerItems.reuse(previousEquipment.get(slot.name()), item.getId(), item.getQuantity()));
 				}
 			}
 		}
 
+		Map<String, PlayerItems.SlotItem> previousInventory = previous != null ? previous.getInventory() : Collections.emptyMap();
 		Map<String, PlayerItems.SlotItem> inventory = new LinkedHashMap<>();
 		ItemContainer inv = client.getItemContainer(InventoryID.INV);
 		if (inv != null)
@@ -1121,19 +1133,26 @@ public class PostiePetePlugin extends Plugin
 			{
 				if (items[slot].getId() > 0)
 				{
-					inventory.put(String.valueOf(slot), new PlayerItems.SlotItem(items[slot].getId(), items[slot].getQuantity()));
+					String key = PlayerItems.inventoryKey(slot);
+					inventory.put(key, PlayerItems.reuse(previousInventory.get(key), items[slot].getId(), items[slot].getQuantity()));
 				}
 			}
 		}
 
-		return new PlayerItems(null, equipment, inventory, captureRunePouch(), captureQuiver());
+		PlayerItems items = new PlayerItems(null,
+			PlayerItems.sameIfEqual(equipment, previous != null ? previous.getEquipment() : null),
+			PlayerItems.sameIfEqual(inventory, previous != null ? previous.getInventory() : null),
+			PlayerItems.sameIfEqual(captureRunePouch(previous), previous != null ? previous.getRunePouch() : null),
+			captureQuiver(previous));
+		lastCapturedItems = items;
+		return items;
 	}
 
 	/**
 	 * Raw contents of the extra ammo slot (Dizana's quiver / bolt pouch). The game retains this
 	 * even when no quiver is worn, so the API decides whether it applies based on the equipment.
 	 */
-	private PlayerItems.SlotItem captureQuiver()
+	private PlayerItems.SlotItem captureQuiver(PlayerItems previous)
 	{
 		int ammoId = client.getVarpValue(VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO);
 		int ammoQuantity = client.getVarpValue(VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO_AMOUNT);
@@ -1141,15 +1160,17 @@ public class PostiePetePlugin extends Plugin
 		{
 			return null;
 		}
-		return new PlayerItems.SlotItem(ammoId, ammoQuantity);
+		return PlayerItems.reuse(previous != null ? previous.getQuiver() : null, ammoId, ammoQuantity);
 	}
 
 	/**
 	 * Raw contents of the rune pouch. The game retains this even when no pouch is carried,
 	 * so the API decides whether it applies based on the inventory. Null if the pouch is empty.
 	 */
-	private List<PlayerItems.SlotItem> captureRunePouch()
+	private List<PlayerItems.SlotItem> captureRunePouch(PlayerItems previous)
 	{
+		List<PlayerItems.SlotItem> previousRunes = previous != null && previous.getRunePouch() != null
+			? previous.getRunePouch() : Collections.emptyList();
 		EnumComposition runeEnum = client.getEnum(EnumID.RUNEPOUCH_RUNE);
 		List<PlayerItems.SlotItem> runes = new ArrayList<>();
 		for (int i = 0; i < RUNE_POUCH_TYPE_VARBITS.length; i++)
@@ -1164,7 +1185,8 @@ public class PostiePetePlugin extends Plugin
 			int runeId = runeEnum.getIntValue(type);
 			if (runeId > 0)
 			{
-				runes.add(new PlayerItems.SlotItem(runeId, quantity));
+				PlayerItems.SlotItem before = runes.size() < previousRunes.size() ? previousRunes.get(runes.size()) : null;
+				runes.add(PlayerItems.reuse(before, runeId, quantity));
 			}
 		}
 		return runes.isEmpty() ? null : runes;

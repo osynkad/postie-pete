@@ -50,6 +50,44 @@ class PlayerItems
 		int quantity;
 	}
 
+	// Inventory slot keys, made once instead of for every snapshot
+	private static final String[] INVENTORY_KEYS = new String[28];
+
+	static
+	{
+		for (int slot = 0; slot < INVENTORY_KEYS.length; slot++)
+		{
+			INVENTORY_KEYS[slot] = String.valueOf(slot);
+		}
+	}
+
+	/**
+	 * The inventory key for a slot, e.g. "0".
+	 */
+	static String inventoryKey(int slot)
+	{
+		return slot < INVENTORY_KEYS.length ? INVENTORY_KEYS[slot] : String.valueOf(slot);
+	}
+
+	/**
+	 * The previous item if it is the same item and quantity, otherwise a new one. Snapshots are never changed after
+	 * they are made, so they can share items.
+	 */
+	static SlotItem reuse(SlotItem previous, int id, int quantity)
+	{
+		return previous != null && previous.getId() == id && previous.getQuantity() == quantity
+			? previous
+			: new SlotItem(id, quantity);
+	}
+
+	/**
+	 * The previous value if it is equal to the new one, so snapshots share the parts that didn't change.
+	 */
+	static <T> T sameIfEqual(T value, T previous)
+	{
+		return previous != null && previous.equals(value) ? previous : value;
+	}
+
 	/**
 	 * Where the start of a kill came from, and so which moment the items are from. Tried in this order.
 	 */
