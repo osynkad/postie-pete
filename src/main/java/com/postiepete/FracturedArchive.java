@@ -59,7 +59,7 @@ class FracturedArchive
 
 	/**
 	 * The tick the completed run started, or the current run if the completion message was missed. Null if the
-	 * start wasn't seen. Read before {@link #consumeRaid}.
+	 * start wasn't seen. Read before {@link #consumeSplits}.
 	 */
 	Integer startTick()
 	{
@@ -76,14 +76,14 @@ class FracturedArchive
 	}
 
 	/**
-	 * The completed run's details, for the reward chest's loot. Uses the run so far if the completion
-	 * message was missed. Consumed, so they can't be attached to later loot.
+	 * The completed run's boss splits, for the reward chest's loot. Uses the run so far if the completion
+	 * message was missed. Empty if none were seen. Consumed, so they can't be attached to later loot.
 	 */
-	LootEvent.Raid consumeRaid()
+	List<LootEvent.Split> consumeSplits()
 	{
-		LootEvent.Raid raid = new LootEvent.Raid(completedSplits != null ? completedSplits : new ArrayList<>(splits));
+		List<LootEvent.Split> result = completedSplits != null ? completedSplits : new ArrayList<>(splits);
 		reset();
-		return raid;
+		return result;
 	}
 
 	void reset()

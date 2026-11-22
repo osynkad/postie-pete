@@ -1,6 +1,7 @@
 package com.postiepete;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -23,17 +24,17 @@ public class PostieEventTest
 	private static final Set<String> COMMON_FIELDS = set("eventType", "timestamp", "rsn", "accountHash");
 
 	private static final List<String> SOURCE_FIELDS = Arrays.asList(
-		"name", "lootName", "npcId", "killCount", "duration", "personalBest", "newPersonalBest", "wave");
+		"name", "lootName", "npcId", "killCount", "duration", "personalBest", "newPersonalBest", "wave", "splits");
 
 	@Test
 	public void lootEventHasOnlyLootFields()
 	{
 		JsonObject json = toJson(new LootEvent(COMMON,
 			LootEvent.Source.of("Mad Angel", new LootEvent.Kill("Mad Angel", 212), 16305,
-				new LootEvent.KillTime(48.6, 41.2, false), null),
-			null, Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450)), null, null, null));
+				new LootEvent.KillTime(48.6, 41.2, false), null, null),
+			Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450)), null, null));
 
-		assertEquals(with(COMMON_FIELDS, "source", "raid", "drops", "playerItems", "waves", "team"), json.keySet());
+		assertEquals(with(COMMON_FIELDS, "source", "drops", "playerItems", "team"), json.keySet());
 		assertEquals("loot", json.get("eventType").getAsString());
 		assertEquals("ExamplePlayer", json.get("rsn").getAsString());
 		JsonObject source = json.getAsJsonObject("source");
@@ -47,9 +48,8 @@ public class PostieEventTest
 		assertEquals(41.2, source.get("personalBest").getAsDouble(), 0);
 		assertEquals(false, source.get("newPersonalBest").getAsBoolean());
 		assertEquals(true, source.get("wave").isJsonNull());
-		assertEquals(true, json.get("raid").isJsonNull());
+		assertEquals(true, source.get("splits").isJsonNull());
 		assertEquals(true, json.get("playerItems").isJsonNull());
-		assertEquals(true, json.get("waves").isJsonNull());
 		assertEquals(true, json.get("team").isJsonNull());
 		JsonObject drop = json.getAsJsonArray("drops").get(0).getAsJsonObject();
 		assertEquals(set("itemId", "itemName", "quantity", "value"), drop.keySet());
@@ -59,29 +59,35 @@ public class PostieEventTest
 	}
 
 	@Test
-	public void raidLootSendsRaidDetails()
+	public void raidLootSendsBossSplitsAndTeam()
 	{
-		LootEvent.Raid raid = new LootEvent.Raid(
-			Arrays.asList(new LootEvent.Split("Archive Guardian", 123.0), new LootEvent.Split("Ezekiel", 141.6)));
+		List<LootEvent.Split> splits =
+			Arrays.asList(new LootEvent.Split("Archive Guardian", 123.0), new LootEvent.Split("Ezekiel", 141.6));
 		JsonObject json = toJson(new LootEvent(COMMON,
 			LootEvent.Source.of("Fractured Archive", new LootEvent.Kill("Fractured Archive", 75), null,
-				new LootEvent.KillTime(1534.2, 1534.2, true), null),
-			raid, Collections.emptyList(), null, null, new LootEvent.Team(3)));
+				new LootEvent.KillTime(1534.2, 1534.2, true), null, splits),
+			Collections.emptyList(), null, new LootEvent.Team(3)));
 
 		JsonObject team = json.getAsJsonObject("team");
 		assertEquals(set("size"), team.keySet());
 		assertEquals(3, team.get("size").getAsInt());
 
-		JsonObject raidJson = json.getAsJsonObject("raid");
-		assertEquals(set("splits"), raidJson.keySet());
-		JsonObject split = raidJson.getAsJsonArray("splits").get(1).getAsJsonObject();
-		assertEquals(set("boss", "duration"), split.keySet());
-		assertEquals("Ezekiel", split.get("boss").getAsString());
+		JsonObject split = json.getAsJsonObject("source").getAsJsonArray("splits").get(1).getAsJsonObject();
+		assertEquals(set("name", "duration"), split.keySet());
+		assertEquals("Ezekiel", split.get("name").getAsString());
 		assertEquals(141.6, split.get("duration").getAsDouble(), 0);
 	}
 
 	@Test
-	public void bossKillSendsGearAndWaves()
+	public void emptySplitsAreSentAsNull()
+	{
+		LootEvent.Source source = LootEvent.Source.of("Fractured Archive", null, null, null, null,
+			Collections.emptyList());
+		assertNull(source.getSplits());
+	}
+
+	@Test
+	public void bossKillSendsGearAndWaveSplits()
 	{
 		Map<String, PlayerItems.SlotItem> equipment = new LinkedHashMap<>();
 		equipment.put("WEAPON", new PlayerItems.SlotItem(20997, 1));
@@ -90,10 +96,11 @@ public class PostieEventTest
 		PlayerItems gear = new PlayerItems(null, equipment, inventory,
 			Collections.singletonList(new PlayerItems.SlotItem(560, 3000)), null)
 			.withCapturedAt(PlayerItems.CapturedAt.RUN_START);
-		List<LootEvent.Wave> waves = Arrays.asList(new LootEvent.Wave(1, 34.2), new LootEvent.Wave(2, 69.6));
+		List<LootEvent.Split> splits = Arrays.asList(new LootEvent.Split("Wave 1", 34.2), new LootEvent.Split("Wave 2", 69.6));
 
 		JsonObject json = toJson(new LootEvent(COMMON,
-			LootEvent.Source.of("Fortis Colosseum", null, null, null, 2), null, Collections.emptyList(), gear, waves, new LootEvent.Team(1)));
+			LootEvent.Source.of("Fortis Colosseum", null, null, null, 2, splits), Collections.emptyList(), gear,
+			new LootEvent.Team(1)));
 
 		JsonObject items = json.getAsJsonObject("playerItems");
 		assertEquals(set("capturedAt", "equipment", "inventory", "rune_pouch", "quiver"), items.keySet());
@@ -105,10 +112,11 @@ public class PostieEventTest
 		assertEquals(3000, items.getAsJsonArray("rune_pouch").get(0).getAsJsonObject().get("quantity").getAsInt());
 		assertEquals(true, items.get("quiver").isJsonNull());
 
-		JsonObject wave = json.getAsJsonArray("waves").get(1).getAsJsonObject();
-		assertEquals(set("wave", "duration"), wave.keySet());
-		assertEquals(2, wave.get("wave").getAsInt());
-		assertEquals(69.6, wave.get("duration").getAsDouble(), 0);
+		JsonObject source = json.getAsJsonObject("source");
+		assertEquals(2, source.get("wave").getAsInt());
+		JsonObject split = source.getAsJsonArray("splits").get(1).getAsJsonObject();
+		assertEquals("Wave 2", split.get("name").getAsString());
+		assertEquals(69.6, split.get("duration").getAsDouble(), 0);
 	}
 
 	@Test
@@ -134,7 +142,7 @@ public class PostieEventTest
 	@Test
 	public void lootWithoutKillCountIsNamedByTheLootTracker()
 	{
-		LootEvent.Source source = LootEvent.Source.of("Reward cart (Wintertodt)", null, null, null, null);
+		LootEvent.Source source = LootEvent.Source.of("Reward cart (Wintertodt)", null, null, null, null, null);
 		assertEquals("Reward cart (Wintertodt)", source.getName());
 		assertEquals(null, source.getLootName());
 		assertEquals(null, source.getNpcId());
@@ -148,7 +156,7 @@ public class PostieEventTest
 	public void lootIsNamedByItsKillCountMessageAndKeepsADifferentLootTrackerName()
 	{
 		LootEvent.Source source = LootEvent.Source.of("Theatre of Blood", new LootEvent.Kill("Theatre of Blood: Hard Mode", 40),
-			null, new LootEvent.KillTime(1234.5, null, false), null);
+			null, new LootEvent.KillTime(1234.5, null, false), null, null);
 		assertEquals("Theatre of Blood: Hard Mode", source.getName());
 		assertEquals("Theatre of Blood", source.getLootName());
 		assertEquals(Integer.valueOf(40), source.getKillCount());
@@ -157,7 +165,7 @@ public class PostieEventTest
 
 		JsonObject json = GSON.toJsonTree(source).getAsJsonObject();
 		assertEquals("The Leviathan", LootEvent.Source.of("The Leviathan", new LootEvent.Kill("Leviathan", 120),
-			12214, null, null).getLootName());
+			12214, null, null, null).getLootName());
 		assertEquals(new HashSet<>(SOURCE_FIELDS), json.keySet());
 	}
 
@@ -165,7 +173,7 @@ public class PostieEventTest
 	public void killWithoutLootHasNoLootTrackerName()
 	{
 		LootEvent.Source source = LootEvent.Source.of(null, new LootEvent.Kill("TzKal-Zuk", 3), null,
-			new LootEvent.KillTime(3720.0, 3720.0, true), null);
+			new LootEvent.KillTime(3720.0, 3720.0, true), null, null);
 		assertEquals("TzKal-Zuk", source.getName());
 		assertEquals(true, source.isNewPersonalBest());
 		assertEquals(null, source.getLootName());
@@ -175,7 +183,7 @@ public class PostieEventTest
 	@Test
 	public void colosseumLootSendsItsWave()
 	{
-		LootEvent.Source source = LootEvent.Source.of("Fortis Colosseum", null, null, null, 7);
+		LootEvent.Source source = LootEvent.Source.of("Fortis Colosseum", null, null, null, 7, null);
 		assertEquals(Integer.valueOf(7), source.getWave());
 	}
 

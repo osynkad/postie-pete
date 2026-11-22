@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.util.Arrays;
+import java.util.List;
 import org.junit.Test;
 
 public class FracturedArchiveTest
@@ -19,12 +20,12 @@ public class FracturedArchiveTest
 		archive.onRaidCompleted();
 
 		assertEquals(Integer.valueOf(100), archive.startTick());
-		LootEvent.Raid raid = archive.consumeRaid();
+		List<LootEvent.Split> splits = archive.consumeSplits();
 		assertNull(archive.startTick());
 		assertEquals(Arrays.asList(
 			new LootEvent.Split("Archive Guardian", 123.0),
 			new LootEvent.Split("Bork", 141.0),
-			new LootEvent.Split("Ocellus", 499.8)), raid.getSplits());
+			new LootEvent.Split("Ocellus", 499.8)), splits);
 	}
 
 	@Test
@@ -39,8 +40,8 @@ public class FracturedArchiveTest
 		archive.onRaidCompleted();
 
 		assertEquals(Integer.valueOf(500), archive.startTick());
-		LootEvent.Raid raid = archive.consumeRaid();
-		assertEquals(Arrays.asList(new LootEvent.Split("Archive Guardian", 110.0)), raid.getSplits());
+		List<LootEvent.Split> splits = archive.consumeSplits();
+		assertEquals(Arrays.asList(new LootEvent.Split("Archive Guardian", 110.0)), splits);
 	}
 
 	@Test
@@ -49,9 +50,9 @@ public class FracturedArchiveTest
 		FracturedArchive archive = new FracturedArchive();
 		archive.onBossCompleted("Xarth", 148.2);
 		archive.onRaidCompleted();
-		archive.consumeRaid();
+		archive.consumeSplits();
 
-		assertTrue(archive.consumeRaid().getSplits().isEmpty());
+		assertTrue(archive.consumeSplits().isEmpty());
 	}
 
 	@Test
@@ -72,7 +73,7 @@ public class FracturedArchiveTest
 		FracturedArchive archive = new FracturedArchive();
 		archive.onBossCompleted("Xarth", 148.2);
 
-		LootEvent.Raid raid = archive.consumeRaid();
-		assertEquals(Arrays.asList(new LootEvent.Split("Xarth", 148.2)), raid.getSplits());
+		List<LootEvent.Split> splits = archive.consumeSplits();
+		assertEquals(Arrays.asList(new LootEvent.Split("Xarth", 148.2)), splits);
 	}
 }

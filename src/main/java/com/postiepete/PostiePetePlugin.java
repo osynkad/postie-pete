@@ -207,10 +207,10 @@ public class PostiePetePlugin extends Plugin
 	private Integer lastDoomLevel;
 	private Double doomFullRunDuration;
 
-	private final WaveRun colosseum = new WaveRun();
-	private final WaveRun doom = new WaveRun();
-	private final WaveRun fightCaves = new WaveRun();
-	private final WaveRun inferno = new WaveRun();
+	private final WaveRun colosseum = new WaveRun("Wave");
+	private final WaveRun doom = new WaveRun("Level");
+	private final WaveRun fightCaves = new WaveRun("Wave");
+	private final WaveRun inferno = new WaveRun("Wave");
 
 	private final FracturedArchive fracturedArchive = new FracturedArchive();
 
@@ -342,7 +342,7 @@ public class PostiePetePlugin extends Plugin
 		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), tick);
 		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
 		Integer wave = null;
-		LootEvent.Raid raid = null;
+		List<LootEvent.Split> splits = null;
 		WaveRun.Run run = null;
 		Integer runStart = null;
 		// Chests with a kill count message are boss kills, and so are these activities' chests without one
@@ -384,7 +384,7 @@ public class PostiePetePlugin extends Plugin
 		else if (FracturedArchive.LOOT_SOURCE.equals(event.getName()))
 		{
 			runStart = fracturedArchive.startTick();
-			raid = fracturedArchive.consumeRaid();
+			splits = fracturedArchive.consumeSplits();
 			bossKill = true;
 		}
 		else if (RaidTeams.CHAMBERS_OF_XERIC.equals(event.getName()))
@@ -394,6 +394,7 @@ public class PostiePetePlugin extends Plugin
 		if (run != null)
 		{
 			runStart = run.getStartTick();
+			splits = run.getSplits();
 		}
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
@@ -414,7 +415,7 @@ public class PostiePetePlugin extends Plugin
 
 		// A chest with no time from the game (e.g. Barrows) is timed from the first hit. Runs and raids keep
 		// their own rules above.
-		if (completionTime == null && run == null && raid == null && !raidChest)
+		if (completionTime == null && run == null && !raidChest)
 		{
 			completionTime = timeFromFirstHit(firstHit, tick);
 		}
@@ -434,8 +435,9 @@ public class PostiePetePlugin extends Plugin
 		{
 			team = bossKill ? teamFor(kill != null ? kill.getName() : null, firstKnown(runStart, fightTimeStart, firstHit), tick) : null;
 		}
-		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(event.getName(), kill, null, completionTime, wave),
-			raid, toDrops(event.getItems()), gear, run != null ? run.getWaves() : null, team));
+		postEvent(new LootEvent(common(localPlayer),
+			LootEvent.Source.of(event.getName(), kill, null, completionTime, wave, splits),
+			toDrops(event.getItems()), gear, team));
 	}
 
 	private void onNpcLoot(Player localPlayer, LootReceived event)
@@ -461,8 +463,8 @@ public class PostiePetePlugin extends Plugin
 		PlayerItems gear = kill != null ? gearAtStart(null, fightTimeStart, firstHit) : null;
 		LootEvent.Team team = kill != null ? teamFor(kill.getName(), firstKnown(fightTimeStart, firstHit), tick) : null;
 		postEvent(new LootEvent(common(localPlayer),
-			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null),
-			null, toDrops(event.getItems()), gear, null, team));
+			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null, null),
+			toDrops(event.getItems()), gear, team));
 	}
 
 	/**
@@ -601,8 +603,9 @@ public class PostiePetePlugin extends Plugin
 		Integer runStart = run != null ? run.getStartTick() : null;
 		PlayerItems gear = gearAtStart(runStart, fightTimeStart, firstHit);
 		LootEvent.Team team = teamFor(kill.getName(), firstKnown(runStart, fightTimeStart, firstHit), client.getTickCount());
-		postEvent(new LootEvent(common(localPlayer), LootEvent.Source.of(null, kill, null, killTime, null),
-			null, Collections.emptyList(), gear, run != null ? run.getWaves() : null, team));
+		postEvent(new LootEvent(common(localPlayer),
+			LootEvent.Source.of(null, kill, null, killTime, null, run != null ? run.getSplits() : null),
+			Collections.emptyList(), gear, team));
 	}
 
 	/**

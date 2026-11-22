@@ -12,13 +12,23 @@ import lombok.Value;
  */
 class WaveRun
 {
-	private final List<LootEvent.Wave> waves = new ArrayList<>();
+	/**
+	 * What the game calls a wave of this activity, e.g. "Wave", or "Level" for Doom of Mokhaiotl delve levels. Each
+	 * split is sent named as this and the wave, e.g. "Wave 3".
+	 */
+	private final String waveName;
+	private final List<Wave> waves = new ArrayList<>();
 	private Integer startTick;
 	private Integer lastWave;
 
 	// The wave being timed in ticks, which ends when the next one starts or the run is finished
 	private Integer openWave;
 	private int openWaveTick;
+
+	WaveRun(String waveName)
+	{
+		this.waveName = waveName;
+	}
 
 	/**
 	 * Called on a wave's completion message, with the time the game printed in seconds if it could be read.
@@ -36,7 +46,7 @@ class WaveRun
 		}
 		if (duration != null)
 		{
-			waves.add(new LootEvent.Wave(wave, duration));
+			waves.add(new Wave(wave, duration));
 		}
 		lastWave = wave;
 	}
@@ -74,7 +84,7 @@ class WaveRun
 	{
 		if (openWave != null)
 		{
-			waves.add(new LootEvent.Wave(openWave, ticksToSeconds(tick - openWaveTick)));
+			waves.add(new Wave(openWave, ticksToSeconds(tick - openWaveTick)));
 			openWave = null;
 		}
 	}
@@ -120,11 +130,17 @@ class WaveRun
 	}
 
 	/**
-	 * The run's waves and start tick, for its loot or kill. Consumed, so they can't be attached to a later one.
+	 * The run's waves as splits and its start tick, for its loot or kill. Consumed, so they can't be attached to a
+	 * later one.
 	 */
 	Run consume()
 	{
-		Run run = new Run(new ArrayList<>(waves), startTick);
+		List<LootEvent.Split> splits = new ArrayList<>(waves.size());
+		for (Wave wave : waves)
+		{
+			splits.add(new LootEvent.Split(waveName + " " + wave.getWave(), wave.getDuration()));
+		}
+		Run run = new Run(splits, startTick);
 		reset();
 		return run;
 	}
@@ -148,12 +164,29 @@ class WaveRun
 	}
 
 	@Value
+	static class Wave
+	{
+		/**
+		 * The wave, or the Doom of Mokhaiotl delve level. Levels past 8 are printed as e.g. "8+ (22)", and the
+		 * level in brackets is used.
+		 */
+		int wave;
+
+		/**
+		 * The wave's time in seconds: as the game printed it for the Colosseum and Doom, or counted in game ticks
+		 * from this wave's start to the next one's for the Fight Caves and the Inferno.
+		 */
+		double duration;
+	}
+
+	@Value
 	static class Run
 	{
 		/**
-		 * The waves seen, in order. Empty if none were seen (e.g. the plugin was turned on mid-run).
+		 * The waves seen, in order, named e.g. "Wave 3". Empty if none were seen (e.g. the plugin was turned on
+		 * mid-run).
 		 */
-		List<LootEvent.Wave> waves;
+		List<LootEvent.Split> splits;
 
 		/**
 		 * The tick the run started, or null if wave 1 wasn't seen or a logout came in between.

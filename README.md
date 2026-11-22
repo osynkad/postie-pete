@@ -52,11 +52,9 @@ New event types and new fields may be added in later versions. Ignore event type
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `source` | object | What the loot came from: see [Source](#source). |
-| `raid` | object \| null | Raid reward chests only (currently the Fractured Archive): see [Raid](#raid). `null` for all other loot. |
+| `source` | object | What the loot came from and how the kill went: see [Source](#source). |
 | `drops` | array | The loot received, as a list of `{ "itemId": number, "itemName": string, "quantity": number, "value": number }`. `itemName` comes from the game's item data and isn't unique, so use `itemId` as the key. `value` is the GE value of **one** item when the drop happened, from the OSRS Wiki real-time prices that RuneLite loads (regardless of the player's "Use wiki item prices" setting). Multiply by `quantity` for the stack value. Untradeable variants that RuneLite maps to a tradeable item (e.g. Sanguine Torva → Torva, noted → unnoted) get that item's value. Other untradeable items are `0`, as is any item if RuneLite hasn't loaded prices yet. Coins are `1` and platinum tokens `1000`. |
 | `playerItems` | object \| null | Boss kills only: your items when the fight started. See [Player items](#player-items). `null` for other loot, and when **Send gear** is off. |
-| `waves` | array \| null | Fortis Colosseum, Doom of Mokhaiotl, Fight Caves and Inferno only: each wave's time. See [Waves](#waves). `null` for all other loot. |
 | `team` | object \| null | Boss kills only: how many players were in the fight. See [Team](#team). `null` for other loot and for Wintertodt, Tempoross and Zalcano. |
 
 #### Source
@@ -70,17 +68,32 @@ New event types and new fields may be added in later versions. Ignore event type
 | `duration` | number \| null | Kill or completion time in seconds, e.g. `83.4`, as reported by the game. For boss kills the game prints no time for (e.g. Corporeal Beast, the God Wars Dungeon generals, the Barrows chest), the plugin's own time instead: game ticks (0.6 seconds each) from your first landed hit until the loot, so a multiple of 0.6; for Barrows, from your first hit on the first brother until the chest. `null` when neither is known, which is the case for most non-boss NPCs. Entry mode raids are sent with their time too: `name` tells the mode (e.g. `"Tombs of Amascut: Entry Mode"`), except for the Fractured Archive, whose kill count message is the same for every mode. |
 | `personalBest` | number \| null | The personal best in seconds as the game reported it with `duration`: `duration` itself for a new personal best, otherwise the "Personal best:" time in the message. `null` when the game showed none. For a full Fortis Colosseum run it is the personal best from the game's "Colosseum duration:" message. Always `null` for Doom of Mokhaiotl, because the game only reports personal bests per delve level there (work out run personal bests from `duration` instead). |
 | `newPersonalBest` | boolean | `true` when the game's kill time message said "(new personal best)", otherwise `false`. A time that ties the personal best is not a new one: the game shows it as "Personal best:", so `duration` equals `personalBest` but `newPersonalBest` is `false`. Always `false` when `personalBest` is `null`. |
-| `wave` | number \| null | How far the run got when the loot was claimed, for activities where loot can be claimed before the end: the **Fortis Colosseum** wave (1–12) or the **Doom of Mokhaiotl** delve level (can go past 8). `null` for all other loot. |
+| `wave` | number \| null | How far the run got when the loot was claimed, for activities where loot can be claimed before the end: the **Fortis Colosseum** wave (1–12) or the **Doom of Mokhaiotl** delve level (can go past 8). `null` for all other loot. Use this rather than counting splits. |
+| `splits` | array \| null | Fortis Colosseum, Doom of Mokhaiotl, Fight Caves, Inferno and Fractured Archive only: the run's waves, delve levels or bosses with their times. See [Splits](#splits). `null` for all other loot, and when none were seen. |
 
 For Fortis Colosseum and Doom of Mokhaiotl, `duration` is only set for a full run: waves 1–12 for the Colosseum, delve levels 1–8 for Doom. The Colosseum's is the game's "Colosseum duration:" time, or if that message was missed, the run time the game keeps (then without a personal best). A Doom run that continues past level 8 still gets the time at the end of level 8. Loot claimed earlier has `duration: null` but is otherwise a normal `loot` event.
 
-A few kills come with no loot at the kill: the **Inferno** and the **Fight Caves** (their cape and Tokkul are a reward, not a drop), and **Wintertodt** and **Tempoross** (rewards are claimed separately and aren't one per kill). When no loot comes with their kill count message, they are still sent as a `loot` event with the kill count's name as `name` (e.g. `"TzKal-Zuk"`, `"Wintertodt"`), `lootName: null`, `npcId: null`, the kill's `killCount` and `duration`, and an empty `drops` list.
+A few kills come with no loot at the kill: the **Inferno** and the **Fight Caves** (their cape and Tokkul are a reward, not a drop), and **Wintertodt** and **Tempoross** (rewards are claimed separately and aren't one per kill). When no loot comes with their kill count message, they are still sent as a `loot` event with the kill count's name as `name` (e.g. `"TzKal-Zuk"`, `"Wintertodt"`), `lootName: null`, `npcId: null`, the kill's `killCount` and `duration`, and an empty `drops` list. The Fight Caves and the Inferno also get their `splits`.
 
-#### Raid
+#### Splits
+
+The parts of a run in the order played, as a list of `{ "name": string, "duration": number }`. Sent with the Fortis Colosseum, Doom of Mokhaiotl and Fractured Archive chests, whenever they are claimed, and with the `"TzTok-Jad"` (Fight Caves) and `"TzKal-Zuk"` (Inferno) kills. `null` for all other loot, and also when none were seen (e.g. the plugin was turned on mid-run): use `source.name` to tell the two apart.
+
+Parts the plugin missed are left out, so the list can have gaps. Don't count splits to find how far a run got: use `wave`.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `splits` | array | Each boss's time in the order fought, as `{ "boss": string, "duration": number }` with the boss as the game names it (e.g. `"Bork"`) and seconds. For the Fractured Archive the 2nd to 4th boss are the path picked. Empty when none were seen (e.g. the plugin was turned on mid-raid). |
+| `name` | string | The part of the run. Waves are `"Wave <n>"` (e.g. `"Wave 3"`) and Doom delve levels `"Level <n>"` (e.g. `"Level 22"`; levels past 8 are printed as e.g. "8+ (22)" and the level in brackets is used), so the number can be parsed from the name. Bosses are named as the game names them (e.g. `"Bork"`). |
+| `duration` | number | The part's time in seconds. What it covers depends on the content, see below. |
+
+What `duration` covers, and whether the splits add up to `source.duration`:
+
+| Content | `name` | `duration` | Adds up to `source.duration` |
+| --- | --- | --- | --- |
+| Fortis Colosseum | `"Wave 1"` – `"Wave 12"` | The time the game printed for the wave. Wave 12's message shows the whole run's time instead, so wave 12 is that time less waves 1–11, and is left out if any of them is missing. | Yes, for a full run with every wave seen, since wave 12 is worked out from the run time. |
+| Doom of Mokhaiotl | `"Level 1"`, `"Level 2"` … | The time the game printed for the delve level. | No: `source.duration` stops at the end of level 8, while splits go on to the deepest level reached. |
+| Fight Caves, Inferno | `"Wave 1"` – `"Wave 63"` / `"Wave 69"` | Counted in game ticks (0.6 seconds each) from the wave's start message to the next one's, so the time between waves is included. The last wave ends at the kill count message. | Close to it, when every wave was seen. |
+| Fractured Archive | the boss, e.g. `"Archive Guardian"`, `"Bork"` | The boss's time as the game printed it. The 2nd to 4th boss are the path picked. | No: the time between bosses isn't included. |
 
 #### Player items
 
@@ -95,15 +108,6 @@ The items are the ones you had when the fight started, not when the loot arrived
 | `inventory` | object | Inventory items keyed by slot index, `"0"` to `"27"`, as `{ "id": number, "quantity": number }`. Empty slots are left out. |
 | `rune_pouch` | array \| null | The runes in the rune pouch, as `{ "id": number, "quantity": number }`, or `null` if it is empty. The game keeps this even when no pouch is carried, so check the inventory for a rune pouch. |
 | `quiver` | object \| null | The ammo in Dizana's quiver, as `{ "id": number, "quantity": number }`, or `null` if empty. The game keeps this even when no quiver is worn, so check the cape. |
-
-#### Waves
-
-Sent with the Fortis Colosseum and Doom of Mokhaiotl chests, whenever they are claimed, and with the `"TzTok-Jad"` (Fight Caves) and `"TzKal-Zuk"` (Inferno) kills. A list of `{ "wave": number, "duration": number }` in the order played. Empty when none were seen (e.g. the plugin was turned on mid-run).
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `wave` | number | The wave, or the delve level for Doom. Doom levels past 8 are printed as e.g. "8+ (22)"; the level in brackets is used. |
-| `duration` | number | The wave's time in seconds. For the Colosseum and Doom, the time the game printed. The Colosseum's wave 12 message shows the whole run's time instead, so wave 12 is that time less waves 1–11, and is left out if any of them is missing. For the Fight Caves and the Inferno, counted in game ticks (0.6 seconds each) from the wave's start message to the next one's, so the time between waves is included. The last wave ends at the kill count message. |
 
 #### Team
 
@@ -129,9 +133,9 @@ A raid chest whose completion wasn't seen (e.g. the plugin was turned on mid-rai
     "duration": 48.6,
     "personalBest": 41.2,
     "newPersonalBest": false,
-    "wave": null
+    "wave": null,
+    "splits": null
   },
-  "raid": null,
   "drops": [
     { "itemId": 536, "itemName": "Dragon bones", "quantity": 2, "value": 2450 },
     { "itemId": 995, "itemName": "Coins", "quantity": 15000, "value": 1 }
@@ -151,7 +155,6 @@ A raid chest whose completion wasn't seen (e.g. the plugin was turned on mid-rai
     "rune_pouch": [{ "id": 560, "quantity": 3000 }, { "id": 565, "quantity": 1500 }],
     "quiver": null
   },
-  "waves": null,
   "team": { "size": 1 }
 }
 ```
@@ -172,9 +175,13 @@ A Fortis Colosseum chest claimed after wave 3:
     "duration": null,
     "personalBest": null,
     "newPersonalBest": false,
-    "wave": 3
+    "wave": 3,
+    "splits": [
+      { "name": "Wave 1", "duration": 34.2 },
+      { "name": "Wave 2", "duration": 69.6 },
+      { "name": "Wave 3", "duration": 81.0 }
+    ]
   },
-  "raid": null,
   "drops": [
     { "itemId": 995, "itemName": "Coins", "quantity": 40000, "value": 1 }
   ],
@@ -185,11 +192,6 @@ A Fortis Colosseum chest claimed after wave 3:
     "rune_pouch": null,
     "quiver": null
   },
-  "waves": [
-    { "wave": 1, "duration": 34.2 },
-    { "wave": 2, "duration": 69.6 },
-    { "wave": 3, "duration": 81.0 }
-  ],
   "team": { "size": 1 }
 }
 ```
@@ -210,15 +212,13 @@ A Fractured Archive chest:
     "duration": 1085.8,
     "personalBest": 1025.2,
     "newPersonalBest": false,
-    "wave": null
-  },
-  "raid": {
+    "wave": null,
     "splits": [
-      { "boss": "Archive Guardian", "duration": 95.4 },
-      { "boss": "Bork", "duration": 141.0 },
-      { "boss": "Moia", "duration": 163.2 },
-      { "boss": "Xarth", "duration": 152.7 },
-      { "boss": "Ocellus", "duration": 210.5 }
+      { "name": "Archive Guardian", "duration": 95.4 },
+      { "name": "Bork", "duration": 141.0 },
+      { "name": "Moia", "duration": 163.2 },
+      { "name": "Xarth", "duration": 152.7 },
+      { "name": "Ocellus", "duration": 210.5 }
     ]
   },
   "drops": [
@@ -231,7 +231,6 @@ A Fractured Archive chest:
     "rune_pouch": null,
     "quiver": null
   },
-  "waves": null,
   "team": { "size": 3 }
 }
 ```
@@ -275,6 +274,12 @@ A Fractured Archive chest:
 ```
 
 Field order in the JSON is not guaranteed.
+
+## Migrating from earlier versions
+
+Changes to the `loot` payload that need a receiver to be updated:
+
+- **`raid` is removed.** The Fractured Archive's boss splits are now in [`source.splits`](#splits), and each split's `boss` is now `name`. `source.splits` also holds the waves of the Fortis Colosseum, Doom of Mokhaiotl, the Fight Caves and the Inferno.
 
 ## Requirements
 

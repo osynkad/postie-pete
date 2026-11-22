@@ -9,14 +9,9 @@ import lombok.Value;
 class LootEvent extends PostieEvent
 {
 	/**
-	 * What the loot came from: its name, kill count, kill time and personal best, and whether it was a new one.
+	 * What the loot came from and how the kill went: its name, kill count, kill time, personal best and splits.
 	 */
 	final Source source;
-
-	/**
-	 * Boss times for raid reward chests (currently the Fractured Archive). Null otherwise.
-	 */
-	final Raid raid;
 	final List<Drop> drops;
 
 	/**
@@ -26,24 +21,16 @@ class LootEvent extends PostieEvent
 	final PlayerItems playerItems;
 
 	/**
-	 * Each wave's time, for the Fortis Colosseum, Doom of Mokhaiotl, the Fight Caves and the Inferno. Null otherwise.
-	 */
-	final List<Wave> waves;
-
-	/**
 	 * How many players were in the fight, for boss kills. Null for other loot and skilling bosses.
 	 */
 	final Team team;
 
-	LootEvent(Common common, Source source, Raid raid, List<Drop> drops, PlayerItems playerItems, List<Wave> waves,
-		Team team)
+	LootEvent(Common common, Source source, List<Drop> drops, PlayerItems playerItems, Team team)
 	{
 		super(LOOT, common);
 		this.source = source;
-		this.raid = raid;
 		this.drops = drops;
 		this.playerItems = playerItems;
-		this.waves = waves;
 		this.team = team;
 	}
 
@@ -100,9 +87,18 @@ class LootEvent extends PostieEvent
 		Integer wave;
 
 		/**
-		 * Builds the source from the Loot Tracker's name and the kill count message that came with the loot, if any.
+		 * The run's parts in the order played, for the Fortis Colosseum, Doom of Mokhaiotl, the Fight Caves, the
+		 * Inferno and the Fractured Archive. Null for all other loot, and when none were seen (e.g. the plugin
+		 * was turned on mid-run).
 		 */
-		static Source of(String lootTrackerName, Kill kill, Integer npcId, KillTime killTime, Integer wave)
+		List<Split> splits;
+
+		/**
+		 * Builds the source from the Loot Tracker's name and the kill count message that came with the loot, if
+		 * any. Empty splits are sent as null.
+		 */
+		static Source of(String lootTrackerName, Kill kill, Integer npcId, KillTime killTime, Integer wave,
+			List<Split> splits)
 		{
 			String name = kill != null ? kill.getName() : lootTrackerName;
 			String lootName = lootTrackerName != null && !lootTrackerName.equals(name) ? lootTrackerName : null;
@@ -110,7 +106,8 @@ class LootEvent extends PostieEvent
 				killTime != null ? killTime.getDuration() : null,
 				killTime != null ? killTime.getPersonalBest() : null,
 				killTime != null && killTime.isNewPersonalBest(),
-				wave);
+				wave,
+				splits != null && !splits.isEmpty() ? splits : null);
 		}
 	}
 
@@ -152,26 +149,16 @@ class LootEvent extends PostieEvent
 	}
 
 	@Value
-	static class Raid
-	{
-		/**
-		 * Each boss's duration, in the order fought, e.g. Archive Guardian, Bork, Moia, Xarth, Ocellus. The
-		 * Fractured Archive's path (the boss picked at each choice) is the 2nd to 4th boss. Empty if none were
-		 * seen (e.g. the plugin was enabled mid-raid).
-		 */
-		List<Split> splits;
-	}
-
-	@Value
 	static class Split
 	{
 		/**
-		 * Boss name as the game writes it in its completion message, e.g. "Bork".
+		 * The part of the run: "Wave 3" (Colosseum, Fight Caves, Inferno), "Level 22" (Doom delve level), or the
+		 * boss as the game writes it in its completion message, e.g. "Bork" (Fractured Archive).
 		 */
-		String boss;
+		String name;
 
 		/**
-		 * The boss's duration in seconds, e.g. 141.0.
+		 * The part's duration in seconds, e.g. 141.0. What it covers depends on the content: see the README.
 		 */
 		double duration;
 	}
@@ -185,22 +172,6 @@ class LootEvent extends PostieEvent
 		 * bosses, the sender plus every other player who was near them at some point during the fight.
 		 */
 		int size;
-	}
-
-	@Value
-	static class Wave
-	{
-		/**
-		 * The wave, or the Doom of Mokhaiotl delve level. Levels past 8 are printed as e.g. "8+ (22)", and the
-		 * level in brackets is used.
-		 */
-		int wave;
-
-		/**
-		 * The wave's time in seconds: as the game printed it for the Colosseum and Doom, or counted in game ticks
-		 * from this wave's start to the next one's for the Fight Caves and the Inferno.
-		 */
-		double duration;
 	}
 
 	@Value
