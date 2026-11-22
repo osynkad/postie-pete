@@ -87,7 +87,7 @@ public class TickHistoryTest
 
 	private static PlayerItems items(int weaponId)
 	{
-		return new PlayerItems(null,
+		return new PlayerItems(
 			Collections.singletonMap("WEAPON", new PlayerItems.SlotItem(weaponId, 1)),
 			Collections.emptyMap(), null, null);
 	}

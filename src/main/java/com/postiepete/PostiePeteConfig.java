@@ -62,7 +62,7 @@ public interface PostiePeteConfig extends Config
 	@ConfigItem(
 		keyName = "sendGear",
 		name = "Send gear",
-		description = "Send your equipment, inventory, rune pouch and quiver from the start of the fight with boss kills",
+		description = "Send your equipment, inventory, rune pouch and quiver from the start of the trip with boss kills",
 		section = lootSection,
 		position = 1
 	)

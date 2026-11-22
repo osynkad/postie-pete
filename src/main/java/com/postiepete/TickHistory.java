@@ -5,8 +5,8 @@ import java.util.Deque;
 import java.util.Iterator;
 
 /**
- * A value over time, by game tick, so a kill can be sent with the value as it was when its fight started: the
- * player's items, or a raid's party size. A snapshot is only added when the value changed.
+ * A value over time, by game tick, so a kill can be sent with the value as it was when its fight started, e.g. a
+ * raid's party size. A snapshot is only added when the value changed.
  */
 class TickHistory<T>
 {

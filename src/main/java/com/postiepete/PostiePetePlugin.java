@@ -138,7 +138,7 @@ public class PostiePetePlugin extends Plugin
 			VarbitID.TFA_CLIENT_P0, VarbitID.TFA_CLIENT_P1, VarbitID.TFA_CLIENT_P2, VarbitID.TFA_CLIENT_P3,
 			VarbitID.TFA_CLIENT_P4, VarbitID.TFA_CLIENT_P5, VarbitID.TFA_CLIENT_P6, VarbitID.TFA_CLIENT_P7});
 
-	// How often stale gear snapshots and fight starts are dropped
+	// How often stale party sizes, fight starts and nearby players are dropped
 	private static final int PRUNE_INTERVAL_TICKS = 100;
 
 	// Skilling bosses: the players around are a crowd, not a team, so no team size is sent
@@ -218,7 +218,7 @@ public class PostiePetePlugin extends Plugin
 
 	private final FracturedArchive fracturedArchive = new FracturedArchive();
 
-	private final TickHistory<PlayerItems> gearHistory = new TickHistory<>();
+	private final TripGear tripGear = new TripGear();
 	private final FightStarts fightStarts = new FightStarts();
 	private final NearbyPlayers nearbyPlayers = new NearbyPlayers();
 
@@ -226,14 +226,7 @@ public class PostiePetePlugin extends Plugin
 	private final Set<Player> scenePlayers = new HashSet<>();
 	private final RaidTeams raidTeams = new RaidTeams();
 
-	// Set when the player's items change, so the gear history gets a snapshot on the next tick
-	private boolean gearChanged;
-
-	// The last items captured, whose unchanged parts the next capture reuses
-	private PlayerItems lastCapturedItems;
-
-	// Each raid's party size over time, by chest name, so a raid's team is its party at the raid's start: the
-	// same moment the gear is taken from
+	// Each raid's party size over time, by chest name, so a raid's team is its party at the raid's start
 	private final Map<String, TickHistory<Integer>> partySizes = new HashMap<>();
 	{
 		for (String raid : RAID_PARTY_SLOTS.keySet())
@@ -264,7 +257,6 @@ public class PostiePetePlugin extends Plugin
 		gson = baseGson.newBuilder().serializeNulls().create();
 		// Turned on while already logged in: no login to wait for
 		lootTrackerChecked = false;
-		gearChanged = true;
 		partyChanged = true;
 		clientThread.invokeLater(() ->
 		{
@@ -297,14 +289,12 @@ public class PostiePetePlugin extends Plugin
 		inferno.reset();
 		fracturedArchive.reset();
 		killCounts.reset();
-		gearHistory.reset();
-		lastCapturedItems = null;
+		tripGear.end();
 		fightStarts.reset();
 		nearbyPlayers.reset();
 		scenePlayers.clear();
 		raidTeams.reset();
 		partySizes.values().forEach(TickHistory::reset);
-		gearChanged = false;
 		partyChanged = false;
 		collectionLogReady = false;
 		lastCollectionLogItemId = 0;
@@ -391,10 +381,6 @@ public class PostiePetePlugin extends Plugin
 			splits = fracturedArchive.consumeSplits();
 			bossKill = true;
 		}
-		else if (RaidTeams.CHAMBERS_OF_XERIC.equals(event.getName()))
-		{
-			runStart = raidTeams.takeCoxStartTick();
-		}
 		if (run != null)
 		{
 			runStart = run.getStartTick();
@@ -403,8 +389,8 @@ public class PostiePetePlugin extends Plugin
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
 
-		// Raids have the game's party size: the party at the raid's start (the moment the gear is from), or else
-		// the size read when the raid was completed (CoX's comes from its completion message)
+		// Raids have the game's party size: the party at the raid's start, or else the size read when the raid
+		// was completed (CoX's comes from its completion message)
 		boolean raidChest = event.getName() != null && event.getName().equals(RaidTeams.chestName(event.getName()));
 		Integer raidSize = raidChest ? raidTeams.takeSize(event.getName()) : null;
 		if (raidChest)
@@ -429,7 +415,7 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		PlayerItems gear = bossKill ? gearAtStart(runStart, fightTimeStart, firstHit) : null;
+		PlayerItems gear = bossKill ? tripGear() : null;
 		LootEvent.Team team;
 		if (raidChest)
 		{
@@ -464,7 +450,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		// Only kills with a kill count message are boss kills
-		PlayerItems gear = kill != null ? gearAtStart(null, fightTimeStart, firstHit) : null;
+		PlayerItems gear = kill != null ? tripGear() : null;
 		LootEvent.Team team = kill != null ? teamFor(kill.getName(), firstKnown(fightTimeStart, firstHit), tick) : null;
 		postEvent(new LootEvent(common(localPlayer),
 			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null, null),
@@ -510,13 +496,11 @@ public class PostiePetePlugin extends Plugin
 		{
 			collectionLogReady = false;
 			// Game ticks before and after aren't comparable, and the account can change
-			gearHistory.reset();
-			lastCapturedItems = null;
+			tripGear.end();
 			partySizes.values().forEach(TickHistory::reset);
 			fightStarts.reset();
 			nearbyPlayers.reset();
 			scenePlayers.clear();
-			raidTeams.onLogout();
 			colosseum.onLogout();
 			doom.onLogout();
 			fightCaves.onLogout();
@@ -525,7 +509,6 @@ public class PostiePetePlugin extends Plugin
 		}
 		else if (state == GameState.LOGGED_IN)
 		{
-			gearChanged = true;
 			partyChanged = true;
 		}
 
@@ -557,11 +540,6 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		int tick = client.getTickCount();
-		if (gearChanged && client.getGameState() == GameState.LOGGED_IN)
-		{
-			gearChanged = false;
-			gearHistory.record(tick, capturePlayerItems());
-		}
 		if (partyChanged && client.getGameState() == GameState.LOGGED_IN)
 		{
 			partyChanged = false;
@@ -573,7 +551,6 @@ public class PostiePetePlugin extends Plugin
 		recordNearbyPlayers(tick);
 		if (tick % PRUNE_INTERVAL_TICKS == 0)
 		{
-			gearHistory.prune(tick);
 			partySizes.values().forEach(history -> history.prune(tick));
 			fightStarts.prune(tick);
 			nearbyPlayers.prune(tick);
@@ -620,7 +597,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		Integer runStart = run != null ? run.getStartTick() : null;
-		PlayerItems gear = gearAtStart(runStart, fightTimeStart, firstHit);
+		PlayerItems gear = tripGear();
 		LootEvent.Team team = teamFor(kill.getName(), firstKnown(runStart, fightTimeStart, firstHit), client.getTickCount());
 		postEvent(new LootEvent(common(localPlayer),
 			LootEvent.Source.of(null, kill, null, killTime, wave, run != null ? run.getSplits() : null),
@@ -762,33 +739,12 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * The player's items when the fight started, from the first start that is known and has a snapshot: the
-	 * run's start, then the kill time the game printed, then the first hit. Otherwise the items now. Null when
-	 * sending gear is turned off.
+	 * The player's items at the start of the current trip, or null if there is none (e.g. the player didn't land
+	 * a hit) or sending gear is turned off.
 	 */
-	private PlayerItems gearAtStart(Integer runStartTick, Integer fightTimeStartTick, Integer firstHitTick)
+	private PlayerItems tripGear()
 	{
-		if (!config.sendGear())
-		{
-			return null;
-		}
-
-		PlayerItems items = runStartTick != null ? gearHistory.at(runStartTick) : null;
-		if (items != null)
-		{
-			return items.withCapturedAt(PlayerItems.CapturedAt.RUN_START);
-		}
-		items = fightTimeStartTick != null ? gearHistory.at(fightTimeStartTick) : null;
-		if (items != null)
-		{
-			return items.withCapturedAt(PlayerItems.CapturedAt.FIGHT_TIME);
-		}
-		items = firstHitTick != null ? gearHistory.at(firstHitTick) : null;
-		if (items != null)
-		{
-			return items.withCapturedAt(PlayerItems.CapturedAt.FIRST_HIT);
-		}
-		return capturePlayerItems().withCapturedAt(PlayerItems.CapturedAt.KILL);
+		return config.sendGear() ? tripGear.get(client.getTickCount()) : null;
 	}
 
 	/**
@@ -811,7 +767,8 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * Counts the player's own hits on NPCs, so kills the game prints no time for know when their fight started.
+	 * Counts the player's own hits on NPCs, so kills the game prints no time for know when their fight started,
+	 * and the first hit of a trip takes the gear snapshot.
 	 */
 	@Subscribe
 	public void onHitsplatApplied(HitsplatApplied event)
@@ -822,26 +779,26 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		NPC npc = (NPC) event.getActor();
-		fightStarts.onHit(FightStarts.key(npc.getId(), npc.getName()), client.getTickCount());
+		int tick = client.getTickCount();
+		fightStarts.onHit(FightStarts.key(npc.getId(), npc.getName()), tick);
+		tripGear.onHit(tick, this::capturePlayerItems);
 	}
 
+	/**
+	 * Opening the bank ends the trip: the next hit is the start of a new one, with a new gear setup.
+	 */
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
-		if (event.getContainerId() == InventoryID.INV || event.getContainerId() == InventoryID.WORN)
+		if (event.getContainerId() == InventoryID.BANK)
 		{
-			gearChanged = true;
+			tripGear.end();
 		}
 	}
 
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
 	{
-		if (isGearVar(event))
-		{
-			gearChanged = true;
-			return;
-		}
 		if (event.getVarbitId() != -1 && isPartySlot(event.getVarbitId()))
 		{
 			partyChanged = true;
@@ -873,27 +830,6 @@ public class PostiePetePlugin extends Plugin
 
 		String itemName = itemManager.getItemComposition(itemId).getName();
 		postEvent(new CollectionLogEvent(common(localPlayer), itemName, itemId));
-	}
-
-	/**
-	 * Whether the change is to the rune pouch or the quiver, which are part of the player's items.
-	 */
-	private static boolean isGearVar(VarbitChanged event)
-	{
-		int varbitId = event.getVarbitId();
-		if (varbitId == -1)
-		{
-			return event.getVarpId() == VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO
-				|| event.getVarpId() == VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO_AMOUNT;
-		}
-		for (int i = 0; i < RUNE_POUCH_TYPE_VARBITS.length; i++)
-		{
-			if (varbitId == RUNE_POUCH_TYPE_VARBITS[i] || varbitId == RUNE_POUCH_QUANTITY_VARBITS[i])
-			{
-				return true;
-			}
-		}
-		return false;
 	}
 
 	/**
@@ -938,10 +874,10 @@ public class PostiePetePlugin extends Plugin
 	{
 		int tick = client.getTickCount();
 
-		// The Chambers of Xeric tells its party when the raid starts and ends, with the team size
+		// The Chambers of Xeric tells its party when the raid is completed, with the team size
 		if (event.getType() == ChatMessageType.FRIENDSCHATNOTIFICATION)
 		{
-			onRaidPartyMessage(Text.removeTags(event.getMessage()), tick);
+			onRaidPartyMessage(Text.removeTags(event.getMessage()));
 			return;
 		}
 
@@ -1067,16 +1003,12 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * A message to the raid's party, tags removed: the Chambers of Xeric's start, or its completion with the
-	 * team size. Falls back to the party size the game keeps if the message shows none.
+	 * A message to the raid's party, tags removed: the Chambers of Xeric's completion with the team size. Falls
+	 * back to the party size the game keeps if the message shows none.
 	 */
-	private void onRaidPartyMessage(String message, int tick)
+	private void onRaidPartyMessage(String message)
 	{
-		if (message.startsWith(RaidTeams.COX_START_MESSAGE))
-		{
-			raidTeams.onCoxStarted(tick);
-		}
-		else if (message.startsWith(RaidTeams.COX_COMPLETE_MESSAGE))
+		if (message.startsWith(RaidTeams.COX_COMPLETE_MESSAGE))
 		{
 			Integer size = RaidTeams.coxTeamSize(message);
 			if (size == null)
@@ -1121,15 +1053,10 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * The player's equipment, inventory, rune pouch and quiver right now. Parts and items that are the same as
-	 * in the last capture are reused rather than copied, so a snapshot in the gear history only adds what changed
-	 * (e.g. one arrow fired only adds a new equipment map, whose unchanged items are shared too).
+	 * The player's equipment, inventory, rune pouch and quiver right now.
 	 */
 	private PlayerItems capturePlayerItems()
 	{
-		PlayerItems previous = lastCapturedItems;
-
-		Map<String, PlayerItems.SlotItem> previousEquipment = previous != null ? previous.getEquipment() : Collections.emptyMap();
 		Map<String, PlayerItems.SlotItem> equipment = new LinkedHashMap<>();
 		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
 		if (worn != null)
@@ -1139,13 +1066,11 @@ public class PostiePetePlugin extends Plugin
 				Item item = worn.getItem(slot.getSlotIdx());
 				if (item != null && item.getId() > 0)
 				{
-					equipment.put(slot.name(),
-						PlayerItems.reuse(previousEquipment.get(slot.name()), item.getId(), item.getQuantity()));
+					equipment.put(slot.name(), new PlayerItems.SlotItem(item.getId(), item.getQuantity()));
 				}
 			}
 		}
 
-		Map<String, PlayerItems.SlotItem> previousInventory = previous != null ? previous.getInventory() : Collections.emptyMap();
 		Map<String, PlayerItems.SlotItem> inventory = new LinkedHashMap<>();
 		ItemContainer inv = client.getItemContainer(InventoryID.INV);
 		if (inv != null)
@@ -1155,26 +1080,19 @@ public class PostiePetePlugin extends Plugin
 			{
 				if (items[slot].getId() > 0)
 				{
-					String key = PlayerItems.inventoryKey(slot);
-					inventory.put(key, PlayerItems.reuse(previousInventory.get(key), items[slot].getId(), items[slot].getQuantity()));
+					inventory.put(String.valueOf(slot), new PlayerItems.SlotItem(items[slot].getId(), items[slot].getQuantity()));
 				}
 			}
 		}
 
-		PlayerItems items = new PlayerItems(null,
-			PlayerItems.sameIfEqual(equipment, previous != null ? previous.getEquipment() : null),
-			PlayerItems.sameIfEqual(inventory, previous != null ? previous.getInventory() : null),
-			PlayerItems.sameIfEqual(captureRunePouch(previous), previous != null ? previous.getRunePouch() : null),
-			captureQuiver(previous));
-		lastCapturedItems = items;
-		return items;
+		return new PlayerItems(equipment, inventory, captureRunePouch(), captureQuiver());
 	}
 
 	/**
 	 * Raw contents of the extra ammo slot (Dizana's quiver / bolt pouch). The game retains this
 	 * even when no quiver is worn, so the API decides whether it applies based on the equipment.
 	 */
-	private PlayerItems.SlotItem captureQuiver(PlayerItems previous)
+	private PlayerItems.SlotItem captureQuiver()
 	{
 		int ammoId = client.getVarpValue(VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO);
 		int ammoQuantity = client.getVarpValue(VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO_AMOUNT);
@@ -1182,17 +1100,15 @@ public class PostiePetePlugin extends Plugin
 		{
 			return null;
 		}
-		return PlayerItems.reuse(previous != null ? previous.getQuiver() : null, ammoId, ammoQuantity);
+		return new PlayerItems.SlotItem(ammoId, ammoQuantity);
 	}
 
 	/**
 	 * Raw contents of the rune pouch. The game retains this even when no pouch is carried,
 	 * so the API decides whether it applies based on the inventory. Null if the pouch is empty.
 	 */
-	private List<PlayerItems.SlotItem> captureRunePouch(PlayerItems previous)
+	private List<PlayerItems.SlotItem> captureRunePouch()
 	{
-		List<PlayerItems.SlotItem> previousRunes = previous != null && previous.getRunePouch() != null
-			? previous.getRunePouch() : Collections.emptyList();
 		EnumComposition runeEnum = client.getEnum(EnumID.RUNEPOUCH_RUNE);
 		List<PlayerItems.SlotItem> runes = new ArrayList<>();
 		for (int i = 0; i < RUNE_POUCH_TYPE_VARBITS.length; i++)
@@ -1207,8 +1123,7 @@ public class PostiePetePlugin extends Plugin
 			int runeId = runeEnum.getIntValue(type);
 			if (runeId > 0)
 			{
-				PlayerItems.SlotItem before = runes.size() < previousRunes.size() ? previousRunes.get(runes.size()) : null;
-				runes.add(PlayerItems.reuse(before, runeId, quantity));
+				runes.add(new PlayerItems.SlotItem(runeId, quantity));
 			}
 		}
 		return runes.isEmpty() ? null : runes;

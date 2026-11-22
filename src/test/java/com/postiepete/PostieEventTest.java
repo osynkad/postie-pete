@@ -93,9 +93,8 @@ public class PostieEventTest
 		equipment.put("WEAPON", new PlayerItems.SlotItem(20997, 1));
 		Map<String, PlayerItems.SlotItem> inventory = new LinkedHashMap<>();
 		inventory.put("0", new PlayerItems.SlotItem(12926, 1));
-		PlayerItems gear = new PlayerItems(null, equipment, inventory,
-			Collections.singletonList(new PlayerItems.SlotItem(560, 3000)), null)
-			.withCapturedAt(PlayerItems.CapturedAt.RUN_START);
+		PlayerItems gear = new PlayerItems(equipment, inventory,
+			Collections.singletonList(new PlayerItems.SlotItem(560, 3000)), null);
 		List<LootEvent.Split> splits = Arrays.asList(new LootEvent.Split("Wave 1", 34.2), new LootEvent.Split("Wave 2", 69.6));
 
 		JsonObject json = toJson(new LootEvent(COMMON,
@@ -103,8 +102,7 @@ public class PostieEventTest
 			new LootEvent.Team(1)));
 
 		JsonObject items = json.getAsJsonObject("playerItems");
-		assertEquals(set("capturedAt", "equipment", "inventory", "runePouch", "quiver"), items.keySet());
-		assertEquals("runStart", items.get("capturedAt").getAsString());
+		assertEquals(set("equipment", "inventory", "runePouch", "quiver"), items.keySet());
 		JsonObject weapon = items.getAsJsonObject("equipment").getAsJsonObject("WEAPON");
 		assertEquals(set("id", "quantity"), weapon.keySet());
 		assertEquals(20997, weapon.get("id").getAsInt());
@@ -117,15 +115,6 @@ public class PostieEventTest
 		JsonObject split = source.getAsJsonArray("splits").get(1).getAsJsonObject();
 		assertEquals("Wave 2", split.get("name").getAsString());
 		assertEquals(69.6, split.get("duration").getAsDouble(), 0);
-	}
-
-	@Test
-	public void everyCapturedAtHasItsName()
-	{
-		assertEquals("\"runStart\"", GSON.toJson(PlayerItems.CapturedAt.RUN_START));
-		assertEquals("\"fightTime\"", GSON.toJson(PlayerItems.CapturedAt.FIGHT_TIME));
-		assertEquals("\"firstHit\"", GSON.toJson(PlayerItems.CapturedAt.FIRST_HIT));
-		assertEquals("\"kill\"", GSON.toJson(PlayerItems.CapturedAt.KILL));
 	}
 
 	@Test
