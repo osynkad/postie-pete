@@ -597,13 +597,15 @@ public class PostiePetePlugin extends Plugin
 		Integer fightTimeStart = fightStartTick(killTime);
 		Integer firstHit = fightStarts.take(kill.getName(), client.getTickCount());
 		WaveRun.Run run = null;
-		if (FIGHT_CAVES_KILL.equals(kill.getName()))
+		Integer wave = null;
+		WaveRun waveRun = FIGHT_CAVES_KILL.equals(kill.getName()) ? fightCaves
+			: INFERNO_KILL.equals(kill.getName()) ? inferno
+			: null;
+		if (waveRun != null)
 		{
-			run = fightCaves.consume();
-		}
-		else if (INFERNO_KILL.equals(kill.getName()))
-		{
-			run = inferno.consume();
+			// How far the run got, like the Colosseum's and Doom's: the last wave, 63 / 69 for a full run
+			wave = waveRun.lastWave();
+			run = waveRun.consume();
 		}
 		if (killTime == null && run == null)
 		{
@@ -621,7 +623,7 @@ public class PostiePetePlugin extends Plugin
 		PlayerItems gear = gearAtStart(runStart, fightTimeStart, firstHit);
 		LootEvent.Team team = teamFor(kill.getName(), firstKnown(runStart, fightTimeStart, firstHit), client.getTickCount());
 		postEvent(new LootEvent(common(localPlayer),
-			LootEvent.Source.of(null, kill, null, killTime, null, run != null ? run.getSplits() : null),
+			LootEvent.Source.of(null, kill, null, killTime, wave, run != null ? run.getSplits() : null),
 			Collections.emptyList(), gear, team));
 	}
 
