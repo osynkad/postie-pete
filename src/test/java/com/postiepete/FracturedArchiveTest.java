@@ -1,7 +1,6 @@
 package com.postiepete;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.util.Arrays;
 import java.util.List;
@@ -13,15 +12,13 @@ public class FracturedArchiveTest
 	public void recordsTheSplits()
 	{
 		FracturedArchive archive = new FracturedArchive();
-		archive.onRunStarted(100);
+		archive.onRunStarted();
 		archive.onBossCompleted("Archive Guardian", 123.0);
 		archive.onBossCompleted("Bork", 141.0);
 		archive.onBossCompleted("Ocellus", 499.8);
 		archive.onRaidCompleted();
 
-		assertEquals(Integer.valueOf(100), archive.startTick());
 		List<LootEvent.Split> splits = archive.consumeSplits();
-		assertNull(archive.startTick());
 		assertEquals(Arrays.asList(
 			new LootEvent.Split("Archive Guardian", 123.0),
 			new LootEvent.Split("Bork", 141.0),
@@ -35,11 +32,10 @@ public class FracturedArchiveTest
 		// A wiped run
 		archive.onBossCompleted("Ezekiel", 100.0);
 
-		archive.onRunStarted(500);
+		archive.onRunStarted();
 		archive.onBossCompleted("Archive Guardian", 110.0);
 		archive.onRaidCompleted();
 
-		assertEquals(Integer.valueOf(500), archive.startTick());
 		List<LootEvent.Split> splits = archive.consumeSplits();
 		assertEquals(Arrays.asList(new LootEvent.Split("Archive Guardian", 110.0)), splits);
 	}
@@ -53,18 +49,6 @@ public class FracturedArchiveTest
 		archive.consumeSplits();
 
 		assertTrue(archive.consumeSplits().isEmpty());
-	}
-
-	@Test
-	public void logoutForgetsTheStartTick()
-	{
-		FracturedArchive archive = new FracturedArchive();
-		archive.onRunStarted(100);
-		archive.onLogout();
-		archive.onBossCompleted("Archive Guardian", 123.0);
-		archive.onRaidCompleted();
-
-		assertNull(archive.startTick());
 	}
 
 	@Test

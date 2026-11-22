@@ -8,7 +8,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -125,8 +124,8 @@ public class PostiePetePlugin extends Plugin
 		VarbitID.RUNE_POUCH_QUANTITY_4
 	};
 
-	// Each raid's party slots, by chest name: non-zero while a player is in the slot. RuneLite's chat commands
-	// plugin counts ToB and ToA team sizes the same way.
+	// Each raid's party slots, by chest name: non-zero while a player is in the slot. Read when the raid is
+	// completed. RuneLite's chat commands plugin counts ToB and ToA team sizes the same way.
 	private static final Map<String, int[]> RAID_PARTY_SLOTS = Map.of(
 		RaidTeams.THEATRE_OF_BLOOD, new int[]{
 			VarbitID.TOB_CLIENT_P0, VarbitID.TOB_CLIENT_P1, VarbitID.TOB_CLIENT_P2, VarbitID.TOB_CLIENT_P3,
@@ -138,7 +137,7 @@ public class PostiePetePlugin extends Plugin
 			VarbitID.TFA_CLIENT_P0, VarbitID.TFA_CLIENT_P1, VarbitID.TFA_CLIENT_P2, VarbitID.TFA_CLIENT_P3,
 			VarbitID.TFA_CLIENT_P4, VarbitID.TFA_CLIENT_P5, VarbitID.TFA_CLIENT_P6, VarbitID.TFA_CLIENT_P7});
 
-	// How often stale party sizes, fight starts and nearby players are dropped
+	// How often stale fight starts and nearby players are dropped
 	private static final int PRUNE_INTERVAL_TICKS = 100;
 
 	// Skilling bosses: the players around are a crowd, not a team, so no team size is sent
@@ -226,18 +225,6 @@ public class PostiePetePlugin extends Plugin
 	private final Set<Player> scenePlayers = new HashSet<>();
 	private final RaidTeams raidTeams = new RaidTeams();
 
-	// Each raid's party size over time, by chest name, so a raid's team is its party at the raid's start
-	private final Map<String, TickHistory<Integer>> partySizes = new HashMap<>();
-	{
-		for (String raid : RAID_PARTY_SLOTS.keySet())
-		{
-			partySizes.put(raid, new TickHistory<>());
-		}
-	}
-
-	// Set when a party slot changes, so the party size histories get a snapshot on the next tick
-	private boolean partyChanged;
-
 	private final KillCounts killCounts = new KillCounts(NPC_KILL_COUNT_MAX_AGE_TICKS, CHEST_TIME_MAX_AGE_TICKS,
 		KILL_WITHOUT_LOOT_TICKS);
 
@@ -257,7 +244,6 @@ public class PostiePetePlugin extends Plugin
 		gson = baseGson.newBuilder().serializeNulls().create();
 		// Turned on while already logged in: no login to wait for
 		lootTrackerChecked = false;
-		partyChanged = true;
 		clientThread.invokeLater(() ->
 		{
 			if (client.getGameState() == GameState.LOGGED_IN)
@@ -294,8 +280,6 @@ public class PostiePetePlugin extends Plugin
 		nearbyPlayers.reset();
 		scenePlayers.clear();
 		raidTeams.reset();
-		partySizes.values().forEach(TickHistory::reset);
-		partyChanged = false;
 		collectionLogReady = false;
 		lastCollectionLogItemId = 0;
 		log.debug("Postie Pete stopped!");
@@ -338,7 +322,6 @@ public class PostiePetePlugin extends Plugin
 		Integer wave = null;
 		List<LootEvent.Split> splits = null;
 		WaveRun.Run run = null;
-		Integer runStart = null;
 		// Chests with a kill count message are boss kills, and so are these activities' chests without one
 		boolean bossKill = kill != null;
 
@@ -377,30 +360,21 @@ public class PostiePetePlugin extends Plugin
 		}
 		else if (FracturedArchive.LOOT_SOURCE.equals(event.getName()))
 		{
-			runStart = fracturedArchive.startTick();
 			splits = fracturedArchive.consumeSplits();
 			bossKill = true;
 		}
+		Integer runStart = run != null ? run.getStartTick() : null;
 		if (run != null)
 		{
-			runStart = run.getStartTick();
 			splits = run.getSplits();
 		}
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
 
-		// Raids have the game's party size: the party at the raid's start, or else the size read when the raid
-		// was completed (CoX's comes from its completion message)
+		// Raids have the game's party size, read when the raid was completed (CoX's comes from its completion
+		// message)
 		boolean raidChest = event.getName() != null && event.getName().equals(RaidTeams.chestName(event.getName()));
 		Integer raidSize = raidChest ? raidTeams.takeSize(event.getName()) : null;
-		if (raidChest)
-		{
-			Integer partyAtStart = partySizeAt(event.getName(), firstKnown(runStart, fightTimeStart, firstHit));
-			if (partyAtStart != null)
-			{
-				raidSize = partyAtStart;
-			}
-		}
 		bossKill |= raidChest;
 
 		// A chest with no time from the game (e.g. Barrows) is timed from the first hit. Runs and raids keep
@@ -497,7 +471,6 @@ public class PostiePetePlugin extends Plugin
 			collectionLogReady = false;
 			// Game ticks before and after aren't comparable, and the account can change
 			tripGear.end();
-			partySizes.values().forEach(TickHistory::reset);
 			fightStarts.reset();
 			nearbyPlayers.reset();
 			scenePlayers.clear();
@@ -505,11 +478,6 @@ public class PostiePetePlugin extends Plugin
 			doom.onLogout();
 			fightCaves.onLogout();
 			inferno.onLogout();
-			fracturedArchive.onLogout();
-		}
-		else if (state == GameState.LOGGED_IN)
-		{
-			partyChanged = true;
 		}
 
 		// The Loot Tracker warning shows once per login, so a hop doesn't repeat it
@@ -540,18 +508,9 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		int tick = client.getTickCount();
-		if (partyChanged && client.getGameState() == GameState.LOGGED_IN)
-		{
-			partyChanged = false;
-			for (Map.Entry<String, TickHistory<Integer>> raid : partySizes.entrySet())
-			{
-				raid.getValue().record(tick, occupiedPartySlots(raid.getKey()));
-			}
-		}
 		recordNearbyPlayers(tick);
 		if (tick % PRUNE_INTERVAL_TICKS == 0)
 		{
-			partySizes.values().forEach(history -> history.prune(tick));
 			fightStarts.prune(tick);
 			nearbyPlayers.prune(tick);
 		}
@@ -647,55 +606,18 @@ public class PostiePetePlugin extends Plugin
 	 */
 	private Integer raidPartySize(String chestName)
 	{
-		int size = occupiedPartySlots(chestName);
-		return size > 0 ? size : null;
-	}
-
-	/**
-	 * How many of the raid's party slots are in use right now, or 0 for a raid without party slots.
-	 */
-	private int occupiedPartySlots(String chestName)
-	{
 		int[] slots = RAID_PARTY_SLOTS.get(chestName);
 		if (slots == null)
 		{
-			return 0;
+			return null;
 		}
 		int[] values = new int[slots.length];
 		for (int i = 0; i < slots.length; i++)
 		{
 			values[i] = client.getVarbitValue(slots[i]);
 		}
-		return RaidTeams.occupiedSlots(values);
-	}
-
-	/**
-	 * The raid's party size on the tick (e.g. its start), from the party size history, or null if it isn't known
-	 * or no party was in the slots then.
-	 */
-	private Integer partySizeAt(String chestName, Integer tick)
-	{
-		TickHistory<Integer> history = partySizes.get(chestName);
-		Integer size = history != null && tick != null ? history.at(tick) : null;
-		return size != null && size > 0 ? size : null;
-	}
-
-	/**
-	 * Whether the varbit is one of a raid's party slots.
-	 */
-	private static boolean isPartySlot(int varbitId)
-	{
-		for (int[] slots : RAID_PARTY_SLOTS.values())
-		{
-			for (int slot : slots)
-			{
-				if (slot == varbitId)
-				{
-					return true;
-				}
-			}
-		}
-		return false;
+		int size = RaidTeams.occupiedSlots(values);
+		return size > 0 ? size : null;
 	}
 
 	/**
@@ -799,12 +721,6 @@ public class PostiePetePlugin extends Plugin
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
 	{
-		if (event.getVarbitId() != -1 && isPartySlot(event.getVarbitId()))
-		{
-			partyChanged = true;
-			return;
-		}
-
 		if (event.getVarpId() != VarPlayerID.COLLECTION_OVERVIEW_LAST_ITEM0 || event.getVarbitId() != -1)
 		{
 			return;
@@ -928,7 +844,7 @@ public class PostiePetePlugin extends Plugin
 
 		if (message.equals(FracturedArchive.RUN_START_MESSAGE))
 		{
-			fracturedArchive.onRunStarted(tick);
+			fracturedArchive.onRunStarted();
 			return;
 		}
 

@@ -26,16 +26,13 @@ class FracturedArchive
 
 	private final List<LootEvent.Split> splits = new ArrayList<>();
 	private List<LootEvent.Split> completedSplits;
-	private Integer startTick;
-	private Integer completedStartTick;
 
 	/**
 	 * Called on the first boss's start message. Clears what's left of an earlier, failed run.
 	 */
-	void onRunStarted(int tick)
+	void onRunStarted()
 	{
 		splits.clear();
-		startTick = tick;
 	}
 
 	/**
@@ -52,27 +49,7 @@ class FracturedArchive
 	void onRaidCompleted()
 	{
 		completedSplits = new ArrayList<>(splits);
-		completedStartTick = startTick;
 		splits.clear();
-		startTick = null;
-	}
-
-	/**
-	 * The tick the completed run started, or the current run if the completion message was missed. Null if the
-	 * start wasn't seen. Read before {@link #consumeSplits}.
-	 */
-	Integer startTick()
-	{
-		return completedSplits != null ? completedStartTick : startTick;
-	}
-
-	/**
-	 * Forgets the start tick after logging out: the game tick count isn't kept across logins.
-	 */
-	void onLogout()
-	{
-		startTick = null;
-		completedStartTick = null;
 	}
 
 	/**
@@ -90,7 +67,5 @@ class FracturedArchive
 	{
 		completedSplits = null;
 		splits.clear();
-		startTick = null;
-		completedStartTick = null;
 	}
 }

@@ -114,7 +114,7 @@ Sent with the same boss kills as [Player items](#player-items), except Wintertod
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `size` | number | Players in the fight, including you (`1` = solo). For the **Theatre of Blood**, **Tombs of Amascut** and **Fractured Archive**, the number of players in the raid's party at the raid's start (or, if that isn't known, when the raid was completed). For the **Chambers of Xeric**, the team size in the game's completion message. For every other boss, you plus each other player who was within 15 tiles of you at some point between the start of the fight and the kill, including players who died or left before the end. In a public area, someone passing close by during the fight counts too. Solo-only content is always `1`. |
+| `size` | number | Players in the fight, including you (`1` = solo). For the **Theatre of Blood**, **Tombs of Amascut** and **Fractured Archive**, the number of players in the raid's party when the raid was completed. For the **Chambers of Xeric**, the team size in the game's completion message. For every other boss, you plus each other player who was within 15 tiles of you at some point between the start of the fight and the kill, including players who died or left before the end. In a public area, someone passing close by during the fight counts too. Solo-only content is always `1`. |
 
 A raid chest whose completion wasn't seen (e.g. the plugin was turned on mid-raid) has `team: null`.
 
