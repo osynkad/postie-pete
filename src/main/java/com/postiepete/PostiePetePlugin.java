@@ -408,6 +408,13 @@ public class PostiePetePlugin extends Plugin
 		}
 		bossKill |= raidChest;
 
+		// A chest with no time from the game (e.g. Barrows) is timed from the first hit. Runs and raids keep
+		// their own rules above.
+		if (completionTime == null && run == null && raid == null && !raidChest)
+		{
+			completionTime = timeFromFirstHit(firstHit, tick);
+		}
+
 		if (!config.sendLoot())
 		{
 			return;
@@ -435,6 +442,11 @@ public class PostiePetePlugin extends Plugin
 		Integer fightTimeStart = fightStartTick(killTime);
 		LootEvent.Kill kill = killCounts.claimForNpcLoot(tick);
 		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
+		// Bosses the game prints no time for (e.g. Corp) are timed from the first hit
+		if (killTime == null)
+		{
+			killTime = timeFromFirstHit(firstHit, tick);
+		}
 		log.debug("NPC loot: {} (tick {}), kill count {}", event.getName(), tick, kill);
 		if (!config.sendLoot())
 		{
@@ -568,6 +580,10 @@ public class PostiePetePlugin extends Plugin
 		else if (INFERNO_KILL.equals(kill.getName()))
 		{
 			run = inferno.consume();
+		}
+		if (killTime == null && run == null)
+		{
+			killTime = timeFromFirstHit(firstHit, client.getTickCount());
 		}
 
 		Player localPlayer = client.getLocalPlayer();
@@ -756,6 +772,15 @@ public class PostiePetePlugin extends Plugin
 	{
 		// lastKillTimeTick is left as it was when the kill time was consumed
 		return killTime != null ? lastKillTimeTick - WaveRun.secondsToTicks(killTime.getDuration()) : null;
+	}
+
+	/**
+	 * The plugin's own kill time, for a kill the game printed no time for: game ticks from the first hit until
+	 * now, with no personal best. Null if the first hit isn't known.
+	 */
+	private static LootEvent.KillTime timeFromFirstHit(Integer firstHitTick, int tick)
+	{
+		return firstHitTick != null ? new LootEvent.KillTime(WaveRun.ticksToSeconds(tick - firstHitTick), null, false) : null;
 	}
 
 	/**

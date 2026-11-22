@@ -76,7 +76,8 @@ class LootEvent extends PostieEvent
 		Integer killCount;
 
 		/**
-		 * Kill / completion duration in seconds (e.g. 83.4), or null if the game didn't report one.
+		 * Kill / completion duration in seconds (e.g. 83.4): the game's, or for bosses it prints none for, the
+		 * plugin's own time from the first hit. Null if neither is known.
 		 */
 		Double duration;
 
