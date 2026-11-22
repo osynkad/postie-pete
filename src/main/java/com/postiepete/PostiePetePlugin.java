@@ -74,8 +74,9 @@ public class PostiePetePlugin extends Plugin
 	// "Wave 2 completed! Wave duration: @mes_hl_red@1:09.60</col>"
 	private static final Pattern COLOSSEUM_WAVE_PATTERN = Pattern.compile("Wave (?<wave>\\d+) completed!");
 
-	// "Delve level: 2 duration: @mes_hl_red@1:19.80</col>. Personal best: ..." (Doom of Mokhaiotl)
-	private static final Pattern DOOM_LEVEL_PATTERN = Pattern.compile("Delve level: (?<level>\\d+)\\+? duration:");
+	// "Delve level: 2 duration: @mes_hl_red@1:19.80</col>. Personal best: ..." (Doom of Mokhaiotl). Levels past 8
+	// show the real level in brackets: "Delve level: 8+ (22) duration: 1:08.4. Personal best: 0:54.0" (seen in game).
+	static final Pattern DOOM_LEVEL_PATTERN = Pattern.compile("Delve level: (?<level>\\d+)\\+?(?: \\((?<deep>\\d+)\\))? duration:");
 
 	// "Total duration: @mes_hl_red@2:03.00</col>", sent right after the delve level duration
 	private static final Pattern DOOM_TOTAL_DURATION_PATTERN = Pattern.compile(
@@ -434,7 +435,8 @@ public class PostiePetePlugin extends Plugin
 		matcher = DOOM_LEVEL_PATTERN.matcher(event.getMessage());
 		if (matcher.lookingAt())
 		{
-			lastDoomLevel = Integer.parseInt(matcher.group("level"));
+			String deep = matcher.group("deep");
+			lastDoomLevel = Integer.parseInt(deep != null ? deep : matcher.group("level"));
 			if (lastDoomLevel == 1)
 			{
 				doomFullRunDuration = null;
