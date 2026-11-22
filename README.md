@@ -97,7 +97,7 @@ What `duration` covers, and whether the splits add up to `source.duration`:
 
 #### Player items
 
-Sent with boss kills: loot or a kill with no loot that came with a kill count message, and every Fortis Colosseum, Doom of Mokhaiotl and Fractured Archive chest. Regular NPC drops, clue caskets, reward carts etc. have `playerItems: null`.
+Sent with boss kills: loot or a kill with no loot that came with a kill count message, every Fortis Colosseum and Doom of Mokhaiotl chest, and every raid chest (Chambers of Xeric, Theatre of Blood, Tombs of Amascut, Fractured Archive), even when its kill count message was missed. Regular NPC drops, clue caskets, reward carts etc. have `playerItems: null`.
 
 The items are the ones you had when the fight started, not when the loot arrived, so supplies used during the fight are still there. Each kill of a respawning boss (e.g. Vorkath, GWD generals) has its own start.
 
