@@ -96,8 +96,8 @@ class LootEvent extends PostieEvent
 		List<Split> splits;
 
 		/**
-		 * The raid's points, for the Chambers of Xeric. Null for all other loot, and when the raid's completion
-		 * wasn't seen.
+		 * The raid's points, for the Chambers of Xeric and the Tombs of Amascut. Null for all other loot, and when
+		 * the raid's completion wasn't seen.
 		 */
 		@With
 		Points points;
@@ -184,15 +184,15 @@ class LootEvent extends PostieEvent
 	}
 
 	/**
-	 * A Chambers of Xeric raid's points when it was completed, which set the chance of a unique.
+	 * A Chambers of Xeric or Tombs of Amascut raid's points when it was completed, which set the chance of a unique.
 	 */
 	@Value
 	static class Points
 	{
 		/**
-		 * The whole party's points.
+		 * The whole party's points. Null for the Tombs of Amascut, whose total the game doesn't send.
 		 */
-		int total;
+		Integer total;
 
 		/**
 		 * The sender's own points.

@@ -49,6 +49,23 @@ public class TombsOfAmascutTest
 	}
 
 	@Test
+	public void personalPointsWithoutATotal()
+	{
+		TombsOfAmascut toa = new TombsOfAmascut();
+		assertNull(toa.consumePoints());
+
+		toa.onChallengeMessage(challenge("Path of Het", "2:10.20", "2:10.20"), 300);
+		toa.onPersonalPoints(18450);
+		assertEquals(new LootEvent.Points(null, 18450), toa.consumePoints());
+		assertNull(toa.consumePoints());
+
+		// A raid's points don't carry over to the next one
+		toa.onPersonalPoints(9000);
+		toa.onChallengeMessage(challenge("Path of Crondis", "1:50.40", "1:50.40"), 300);
+		assertNull(toa.consumePoints());
+	}
+
+	@Test
 	public void raidTimeIsTheCompletionTimeInTheWardensMessage()
 	{
 		LootEvent.KillTime time = TombsOfAmascut.completionTime(WARDENS);

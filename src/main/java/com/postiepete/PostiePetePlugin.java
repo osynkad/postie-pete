@@ -400,6 +400,7 @@ public class PostiePetePlugin extends Plugin
 		{
 			splits = tombsOfAmascut.consumeSplits();
 			invocation = tombsOfAmascut.consumeInvocation();
+			points = tombsOfAmascut.consumePoints();
 		}
 		Integer runStart = run != null ? run.getStartTick() : null;
 		if (run != null)
@@ -824,6 +825,17 @@ public class PostiePetePlugin extends Plugin
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
 	{
+		// The game sends the Tombs of Amascut personal points at the end of the raid only
+		if (event.getVarpId() == VarPlayerID.TOA_PERSONAL_CONTRIBUTION && event.getVarbitId() == -1)
+		{
+			if (event.getValue() > 0)
+			{
+				log.debug("Tombs of Amascut personal points: {}", event.getValue());
+				tombsOfAmascut.onPersonalPoints(event.getValue());
+			}
+			return;
+		}
+
 		if (event.getVarpId() != VarPlayerID.COLLECTION_OVERVIEW_LAST_ITEM0 || event.getVarbitId() != -1)
 		{
 			return;

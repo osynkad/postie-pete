@@ -9,8 +9,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Follows a Tombs of Amascut raid, every mode: each challenge's time (the paths and the bosses) and the raid's
- * invocation level, so they can be sent with the reward chest's loot.
+ * Follows a Tombs of Amascut raid, every mode: each challenge's time (the paths and the bosses), the raid's
+ * invocation level and the player's points, so they can be sent with the reward chest's loot.
  * <p>
  * The raid has no start message, and its paths can be done in any order, so a challenge whose total is its own
  * duration (the raid's first) starts the run, and clears what's left of one that was failed.
@@ -42,6 +42,7 @@ class TombsOfAmascut
 
 	private final RaidSplits splits = new RaidSplits();
 	private Integer invocation;
+	private Integer personalPoints;
 
 	/**
 	 * Called on a game message, tags removed, with the raid level the game keeps at that time. Returns true if it
@@ -61,6 +62,7 @@ class TombsOfAmascut
 		if (total != null && Math.abs(PostiePetePlugin.parseDuration(total) - duration) < 0.05)
 		{
 			splits.onRunStarted();
+			personalPoints = null;
 		}
 		splits.onBossCompleted(room, duration);
 		if (room.equals(WARDENS))
@@ -97,9 +99,29 @@ class TombsOfAmascut
 		return result;
 	}
 
+	/**
+	 * Called when the game sends the player's points, which it does at the end of the raid only.
+	 */
+	void onPersonalPoints(int points)
+	{
+		personalPoints = points;
+	}
+
+	/**
+	 * The player's points for the completed raid, or null if the game didn't send them. The game doesn't send the
+	 * party's total, so it is always null. Consumed.
+	 */
+	LootEvent.Points consumePoints()
+	{
+		LootEvent.Points result = personalPoints != null ? new LootEvent.Points(null, personalPoints) : null;
+		personalPoints = null;
+		return result;
+	}
+
 	void reset()
 	{
 		splits.reset();
 		invocation = null;
+		personalPoints = null;
 	}
 }
