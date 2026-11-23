@@ -90,8 +90,8 @@ class LootEvent extends PostieEvent
 
 		/**
 		 * The run's parts in the order played, for the Fortis Colosseum, Doom of Mokhaiotl, the Fight Caves, the
-		 * Inferno, the Chambers of Xeric, the Theatre of Blood and the Fractured Archive. Null for all other loot,
-		 * and when none were seen (e.g. the plugin was turned on mid-run).
+		 * Inferno, the Chambers of Xeric, the Theatre of Blood, the Tombs of Amascut and the Fractured Archive. Null
+		 * for all other loot, and when none were seen (e.g. the plugin was turned on mid-run).
 		 */
 		List<Split> splits;
 
@@ -101,6 +101,13 @@ class LootEvent extends PostieEvent
 		 */
 		@With
 		Points points;
+
+		/**
+		 * The raid's invocation level, for the Tombs of Amascut, e.g. 300. Null for all other loot, and when the
+		 * raid's completion wasn't seen.
+		 */
+		@With
+		Integer invocation;
 
 		/**
 		 * Builds the source from the Loot Tracker's name and the kill count message that came with the loot, if
@@ -117,6 +124,7 @@ class LootEvent extends PostieEvent
 				killTime != null && killTime.isNewPersonalBest(),
 				wave,
 				splits != null && !splits.isEmpty() ? splits : null,
+				null,
 				null);
 		}
 	}
@@ -164,7 +172,8 @@ class LootEvent extends PostieEvent
 		/**
 		 * The part of the run: "Wave 3" (Colosseum, Fight Caves, Inferno), "Level 22" (Doom delve level), "Tekton",
 		 * "Upper level" or "Great Olm" (Chambers of Xeric, each level after its rooms), or the room or boss as the
-		 * game writes it in its completion message, e.g. "Xarpus" (Theatre of Blood) or "Bork" (Fractured Archive).
+		 * game writes it in its completion message, e.g. "Xarpus" (Theatre of Blood), "Path of Het" or "Akkha" (Tombs
+		 * of Amascut) or "Bork" (Fractured Archive).
 		 */
 		String name;
 

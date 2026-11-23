@@ -22,9 +22,6 @@ class TheatreOfBlood
 	 */
 	static final String FIRST_ROOM = "The Maiden of Sugadinti";
 
-	// Where the raid's completion time starts in Verzik's room message, in lower case
-	private static final String COMPLETION_TIME = "completion time:";
-
 	private final RaidSplits splits = new RaidSplits();
 
 	/**
@@ -51,21 +48,11 @@ class TheatreOfBlood
 	 * The raid's completion time in a room message, tags kept, or null if it has none. Verzik's room message ends
 	 * with it, after the room's own duration (seen in game): "Wave 'The Final Challenge' (Normal Mode)
 	 * complete!&lt;br&gt;Duration: &lt;col=ff0000&gt;5:18.00&lt;/col&gt;&lt;br&gt;Theatre of Blood completion time:
-	 * &lt;col=ff0000&gt;18:23.40&lt;/col&gt;. Personal best: 16:00.60". The room's duration isn't the raid's time, so
-	 * only the part from "completion time:" on is read.
+	 * &lt;col=ff0000&gt;18:23.40&lt;/col&gt;. Personal best: 16:00.60".
 	 */
 	static LootEvent.KillTime completionTime(String message)
 	{
-		int start = message.toLowerCase().indexOf(COMPLETION_TIME);
-		if (start < 0)
-		{
-			return null;
-		}
-		Matcher matcher = PostiePetePlugin.KILL_DURATION_PATTERN.matcher(message);
-		matcher.region(start, message.length());
-		// So the pattern can still see a "total " in front, which marks the time it ignores
-		matcher.useTransparentBounds(true);
-		return matcher.lookingAt() ? PostiePetePlugin.parseKillTime(matcher) : null;
+		return PostiePetePlugin.completionTimeAfterRoom(message);
 	}
 
 	/**

@@ -25,7 +25,7 @@ public class PostieEventTest
 
 	private static final List<String> SOURCE_FIELDS = Arrays.asList(
 		"name", "lootName", "npcId", "killCount", "duration", "personalBest", "newPersonalBest", "wave", "splits",
-		"points");
+		"points", "invocation");
 
 	@Test
 	public void lootEventHasOnlyLootFields()

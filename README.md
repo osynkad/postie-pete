@@ -69,8 +69,9 @@ New event types and new fields may be added in later versions. Ignore event type
 | `personalBest` | number \| null | The personal best in seconds as the game reported it with `duration`: `duration` itself for a new personal best, otherwise the "Personal best:" time in the message. `null` when the game showed none. For a full Fortis Colosseum run it is the personal best from the game's "Colosseum duration:" message. Always `null` for Doom of Mokhaiotl, because the game only reports personal bests per delve level there (work out run personal bests from `duration` instead). |
 | `newPersonalBest` | boolean | `true` when the game's kill time message said "(new personal best)", otherwise `false`. A time that ties the personal best is not a new one: the game shows it as "Personal best:", so `duration` equals `personalBest` but `newPersonalBest` is `false`. Always `false` when `personalBest` is `null`. |
 | `wave` | number \| null | How far the run got, for wave activities: the **Fortis Colosseum** wave when the loot was claimed (1–12), the **Doom of Mokhaiotl** delve level (can go past 8), and the **Fight Caves** / **Inferno** wave at the kill (63 / 69 for a full run). Doom's comes from the game's loot data, so it is always known. The others come from the last wave message the plugin saw, which can be later than the last split (a wave whose time couldn't be read has no split), and are `null` if no wave message was seen. `null` for all other loot. Use this rather than counting splits. |
-| `splits` | array \| null | Fortis Colosseum, Doom of Mokhaiotl, Fight Caves, Inferno, Chambers of Xeric, Theatre of Blood and Fractured Archive only: the run's waves, delve levels, levels, rooms or bosses with their times. See [Splits](#splits). `null` for all other loot, and when none were seen. |
+| `splits` | array \| null | Fortis Colosseum, Doom of Mokhaiotl, Fight Caves, Inferno, Chambers of Xeric, Theatre of Blood, Tombs of Amascut and Fractured Archive only: the run's waves, delve levels, levels, rooms or bosses with their times. See [Splits](#splits). `null` for all other loot, and when none were seen. |
 | `points` | object \| null | Chambers of Xeric only (Challenge Mode included): the raid's points when it was completed, which set the chance of a unique, as `{ "total": number, "personal": number }`. `total` is the whole party's points, `personal` your own. `null` for all other loot, and when the raid's completion wasn't seen. |
+| `invocation` | number \| null | Tombs of Amascut only (every mode): the raid's invocation level, e.g. `300`, as the game keeps it when the Wardens are defeated. `null` for all other loot, and when the raid's completion wasn't seen. |
 
 For Fortis Colosseum and Doom of Mokhaiotl, `duration` is only set for a full run: waves 1–12 for the Colosseum, delve levels 1–8 for Doom. The Colosseum's is the game's "Colosseum duration:" time, or if that message was missed, the run time the game keeps (then without a personal best). A Doom run that continues past level 8 still gets the time at the end of level 8. Loot claimed earlier has `duration: null` but is otherwise a normal `loot` event.
 
@@ -78,13 +79,13 @@ A few kills come with no loot at the kill: the **Inferno** and the **Fight Caves
 
 #### Splits
 
-The parts of a run in the order played, as a list of `{ "name": string, "duration": number }`. Sent with the Fortis Colosseum, Doom of Mokhaiotl, Chambers of Xeric, Theatre of Blood and Fractured Archive chests, whenever they are claimed, and with the `"TzTok-Jad"` (Fight Caves) and `"TzKal-Zuk"` (Inferno) kills. `null` for all other loot, and also when none were seen (e.g. the plugin was turned on mid-run): use `source.name` to tell the two apart.
+The parts of a run in the order played, as a list of `{ "name": string, "duration": number }`. Sent with the Fortis Colosseum, Doom of Mokhaiotl, Chambers of Xeric, Theatre of Blood, Tombs of Amascut and Fractured Archive chests, whenever they are claimed, and with the `"TzTok-Jad"` (Fight Caves) and `"TzKal-Zuk"` (Inferno) kills. `null` for all other loot, and also when none were seen (e.g. the plugin was turned on mid-run): use `source.name` to tell the two apart.
 
 Parts the plugin missed are left out, so the list can have gaps. Don't count splits to find how far a run got: use `wave`.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `name` | string | The part of the run. Waves are `"Wave <n>"` (e.g. `"Wave 3"`) and Doom delve levels `"Level <n>"` (e.g. `"Level 22"`; levels past 8 are printed as e.g. "8+ (22)" and the level in brackets is used), so the number can be parsed from the name. Bosses and Theatre of Blood rooms are named as the game names them (e.g. `"Bork"`, `"The Pestilent Bloat"`). |
+| `name` | string | The part of the run. Waves are `"Wave <n>"` (e.g. `"Wave 3"`) and Doom delve levels `"Level <n>"` (e.g. `"Level 22"`; levels past 8 are printed as e.g. "8+ (22)" and the level in brackets is used), so the number can be parsed from the name. Bosses, Theatre of Blood rooms and Tombs of Amascut challenges are named as the game names them (e.g. `"Bork"`, `"The Pestilent Bloat"`, `"Path of Het"`). |
 | `duration` | number | The part's time in seconds. What it covers depends on the content, see below. |
 
 What `duration` covers, and whether the splits add up to `source.duration`:
@@ -96,6 +97,7 @@ What `duration` covers, and whether the splits add up to `source.duration`:
 | Fight Caves, Inferno | `"Wave 1"` – `"Wave 63"` / `"Wave 69"` | Counted in game ticks (0.6 seconds each) from the wave's start message to the next one's, so the time between waves is included. The last wave ends at the kill count message. | Close to it, when every wave was seen. |
 | Chambers of Xeric | the rooms (e.g. `"Tekton"`, `"Ice demon"`, see [below](#chambers-of-xeric-rooms)) and levels (e.g. `"Upper level"`, `"Lower level"`), then `"Great Olm"`, in the order completed: each level after its rooms | The game prints the raid's time so far at the end of each level, so a level's time is that less the level before's, and the Great Olm's is the raid's time less the last level's. If the raid's start wasn't seen, the first level seen is left out, and the Great Olm if no level or no raid time was. Challenge Mode is the same. | The levels and `"Great Olm"` do, when the whole raid was seen. The rooms overlap their level, so leave them out when adding up. |
 | Theatre of Blood | the room: `"The Maiden of Sugadinti"`, `"The Pestilent Bloat"`, `"The Nylocas"`, `"Sotetseg"`, `"Xarpus"`, `"The Final Challenge"` (Verzik) | The room's time as the game printed it, in every mode. | Yes, when every room was seen: `source.duration` is the game's completion time, which leaves out the time between rooms (not its total completion time, which includes it). |
+| Tombs of Amascut | the challenge, in the order done: the paths `"Path of Apmeken"`, `"Path of Crondis"`, `"Path of Het"`, `"Path of Scabaras"`, their bosses `"Ba-Ba"`, `"Zebak"`, `"Akkha"`, `"Kephri"`, then `"The Wardens"` | The challenge's time as the game printed it, in every mode. The raid has no start message, so a new raid is noticed from its first challenge, whose total is its own time. | Yes, when every challenge was seen: `source.duration` is the game's challenge completion time, which leaves out the time between challenges (not its total completion time, which includes it). |
 | Fractured Archive | the boss, e.g. `"Archive Guardian"`, `"Bork"` | The boss's time as the game printed it. The 2nd to 4th boss are the path picked. | No: the time between bosses isn't included. |
 
 #### Chambers of Xeric rooms
@@ -160,7 +162,8 @@ A raid chest whose completion wasn't seen (e.g. the plugin was turned on mid-rai
     "newPersonalBest": false,
     "wave": null,
     "splits": null,
-    "points": null
+    "points": null,
+    "invocation": null
   },
   "drops": [
     { "itemId": 536, "itemName": "Dragon bones", "quantity": 2, "value": 2450 },
@@ -206,7 +209,8 @@ A Fortis Colosseum chest claimed after wave 3:
       { "name": "Wave 2", "duration": 69.6 },
       { "name": "Wave 3", "duration": 81.0 }
     ],
-    "points": null
+    "points": null,
+    "invocation": null
   },
   "drops": [
     { "itemId": 995, "itemName": "Coins", "quantity": 40000, "value": 1 }
@@ -245,7 +249,8 @@ A Fractured Archive chest:
       { "name": "Xarth", "duration": 152.7 },
       { "name": "Ocellus", "duration": 210.5 }
     ],
-    "points": null
+    "points": null,
+    "invocation": null
   },
   "drops": [
     { "itemId": 995, "itemName": "Coins", "quantity": 50000, "value": 1 }

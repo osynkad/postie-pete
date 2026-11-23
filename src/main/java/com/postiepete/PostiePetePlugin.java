@@ -156,6 +156,9 @@ public class PostiePetePlugin extends Plugin
 		"Total duration: (?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)");
 
 	// "Challenge complete: Bork. Duration: <col=ef1020>2:21.00</col>. Total: ...", tags removed (Fractured Archive)
+	// Where a raid's completion time starts in its last room's message, in lower case
+	private static final String COMPLETION_TIME = "completion time:";
+
 	private static final Pattern TFA_BOSS_COMPLETE_PATTERN = Pattern.compile(
 		"Challenge complete: (?<boss>.+?)\\. Duration: (?<time>[0-9:]+(?:\\.[0-9]+)?)");
 
@@ -229,6 +232,7 @@ public class PostiePetePlugin extends Plugin
 	private final TheatreOfBlood theatreOfBlood = new TheatreOfBlood();
 	private final ChambersOfXeric chambersOfXeric = new ChambersOfXeric();
 	private final CoxRooms coxRooms = new CoxRooms();
+	private final TombsOfAmascut tombsOfAmascut = new TombsOfAmascut();
 
 	private final TripGear tripGear = new TripGear();
 	private final FightStarts fightStarts = new FightStarts();
@@ -291,6 +295,7 @@ public class PostiePetePlugin extends Plugin
 		theatreOfBlood.reset();
 		chambersOfXeric.reset();
 		coxRooms.reset();
+		tombsOfAmascut.reset();
 		killCounts.reset();
 		tripGear.end();
 		fightStarts.reset();
@@ -339,6 +344,7 @@ public class PostiePetePlugin extends Plugin
 		Integer wave = null;
 		List<LootEvent.Split> splits = null;
 		LootEvent.Points points = null;
+		Integer invocation = null;
 		WaveRun.Run run = null;
 		// Chests with a kill count message are boss kills, and so are these activities' chests without one
 		boolean bossKill = kill != null;
@@ -390,6 +396,11 @@ public class PostiePetePlugin extends Plugin
 			splits = chambersOfXeric.consumeSplits();
 			points = chambersOfXeric.consumePoints();
 		}
+		else if (RaidTeams.TOMBS_OF_AMASCUT.equals(event.getName()))
+		{
+			splits = tombsOfAmascut.consumeSplits();
+			invocation = tombsOfAmascut.consumeInvocation();
+		}
 		Integer runStart = run != null ? run.getStartTick() : null;
 		if (run != null)
 		{
@@ -426,7 +437,8 @@ public class PostiePetePlugin extends Plugin
 			team = bossKill ? teamFor(kill != null ? kill.getName() : null, firstKnown(runStart, fightTimeStart, firstHit), tick) : null;
 		}
 		postEvent(new LootEvent(common(localPlayer),
-			LootEvent.Source.of(event.getName(), kill, null, completionTime, wave, splits).withPoints(points),
+			LootEvent.Source.of(event.getName(), kill, null, completionTime, wave, splits).withPoints(points)
+				.withInvocation(invocation),
 			toDrops(event.getItems()), gear, team));
 	}
 
@@ -951,6 +963,18 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
+		// Checked before the Fractured Archive's, which has the same message, and KILL_DURATION_PATTERN: a
+		// challenge's duration isn't the raid's time
+		if (tombsOfAmascut.onChallengeMessage(message, client.getVarbitValue(VarbitID.TOA_CLIENT_RAID_LEVEL)))
+		{
+			LootEvent.KillTime completionTime = TombsOfAmascut.completionTime(event.getMessage());
+			if (completionTime != null)
+			{
+				setKillTime(completionTime, tick, RaidTeams.TOMBS_OF_AMASCUT);
+			}
+			return;
+		}
+
 		// Checked before KILL_DURATION_PATTERN, which also matches these. A boss's duration
 		// isn't a kill time: the raid's loot gets the total completion time.
 		matcher = TFA_BOSS_COMPLETE_PATTERN.matcher(message);
@@ -1247,6 +1271,25 @@ public class PostiePetePlugin extends Plugin
 			personalBest = parseDuration(matcher.group("pb"));
 		}
 		return new LootEvent.KillTime(duration, personalBest, newPersonalBest);
+	}
+
+	/**
+	 * The raid's completion time in a raid's last room message, tags kept, or null if it has none. The Theatre of
+	 * Blood's Verzik room and the Tombs of Amascut's Wardens end with it, after the room's own duration, which isn't
+	 * the raid's time, so only the part from "completion time:" on is read.
+	 */
+	static LootEvent.KillTime completionTimeAfterRoom(String message)
+	{
+		int start = message.toLowerCase().indexOf(COMPLETION_TIME);
+		if (start < 0)
+		{
+			return null;
+		}
+		Matcher matcher = KILL_DURATION_PATTERN.matcher(message);
+		matcher.region(start, message.length());
+		// So the pattern can still see a "total " in front, which marks the time it ignores
+		matcher.useTransparentBounds(true);
+		return matcher.lookingAt() ? parseKillTime(matcher) : null;
 	}
 
 	/**
