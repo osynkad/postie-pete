@@ -159,6 +159,9 @@ public class PostiePetePlugin extends Plugin
 	// The first Theatre of Blood room. The raid has no start message, so its completion starts the run.
 	static final String TOB_FIRST_ROOM = "The Maiden of Sugadinti";
 
+	// Where the raid's completion time starts in Verzik's room message, in lower case
+	private static final String TOB_COMPLETION_TIME = "completion time:";
+
 	private static final String COLOSSEUM = "Fortis Colosseum";
 	private static final String SOL_HEREDIT = "Sol Heredit";
 	private static final String DOOM_OF_MOKHAIOTL = "Doom of Mokhaiotl";
@@ -893,6 +896,12 @@ public class PostiePetePlugin extends Plugin
 				theatreOfBlood.onRunStarted();
 			}
 			theatreOfBlood.onBossCompleted(room, parseDuration(matcher.group("time")));
+			LootEvent.KillTime completionTime = tobCompletionTime(event.getMessage());
+			if (completionTime != null)
+			{
+				lastKillTime = completionTime;
+				lastKillTimeTick = tick;
+			}
 			return;
 		}
 
@@ -1118,6 +1127,27 @@ public class PostiePetePlugin extends Plugin
 			personalBest = parseDuration(matcher.group("pb"));
 		}
 		return new LootEvent.KillTime(duration, personalBest, newPersonalBest);
+	}
+
+	/**
+	 * The raid's completion time in a Theatre of Blood room message, or null if it has none. Verzik's room message
+	 * ends with it, after the room's own duration (seen in game): "Wave 'The Final Challenge' (Normal Mode)
+	 * complete!&lt;br&gt;Duration: &lt;col=ff0000&gt;5:18.00&lt;/col&gt;&lt;br&gt;Theatre of Blood completion time:
+	 * &lt;col=ff0000&gt;18:23.40&lt;/col&gt;. Personal best: 16:00.60". The room's duration isn't the raid's time, so
+	 * only the part from "completion time:" on is read.
+	 */
+	static LootEvent.KillTime tobCompletionTime(String message)
+	{
+		int start = message.toLowerCase().indexOf(TOB_COMPLETION_TIME);
+		if (start < 0)
+		{
+			return null;
+		}
+		Matcher matcher = KILL_DURATION_PATTERN.matcher(message);
+		matcher.region(start, message.length());
+		// So the pattern can still see a "total " in front, which marks the time it ignores
+		matcher.useTransparentBounds(true);
+		return matcher.lookingAt() ? parseKillTime(matcher) : null;
 	}
 
 	/**

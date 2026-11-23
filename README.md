@@ -93,7 +93,7 @@ What `duration` covers, and whether the splits add up to `source.duration`:
 | Fortis Colosseum | `"Wave 1"` – `"Wave 12"` | The time the game printed for the wave. Wave 12's message shows the whole run's time instead, so wave 12 is that time less waves 1–11, and is left out if any of them is missing. | Yes, for a full run with every wave seen, since wave 12 is worked out from the run time. |
 | Doom of Mokhaiotl | `"Level 1"`, `"Level 2"` … | The time the game printed for the delve level. | No: `source.duration` stops at the end of level 8, while splits go on to the deepest level reached. |
 | Fight Caves, Inferno | `"Wave 1"` – `"Wave 63"` / `"Wave 69"` | Counted in game ticks (0.6 seconds each) from the wave's start message to the next one's, so the time between waves is included. The last wave ends at the kill count message. | Close to it, when every wave was seen. |
-| Theatre of Blood | the room: `"The Maiden of Sugadinti"`, `"The Pestilent Bloat"`, `"The Nylocas"`, `"Sotetseg"`, `"Xarpus"`, `"The Final Challenge"` (Verzik) | The room's time as the game printed it, in every mode. | No: the time between rooms isn't included. |
+| Theatre of Blood | the room: `"The Maiden of Sugadinti"`, `"The Pestilent Bloat"`, `"The Nylocas"`, `"Sotetseg"`, `"Xarpus"`, `"The Final Challenge"` (Verzik) | The room's time as the game printed it, in every mode. | Yes, when every room was seen: `source.duration` is the game's completion time, which leaves out the time between rooms (not its total completion time, which includes it). |
 | Fractured Archive | the boss, e.g. `"Archive Guardian"`, `"Bork"` | The boss's time as the game printed it. The 2nd to 4th boss are the path picked. | No: the time between bosses isn't included. |
 
 #### Player items
