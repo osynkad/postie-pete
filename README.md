@@ -117,7 +117,8 @@ Sent with the same boss kills as [Player items](#player-items), except Wintertod
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `size` | number | Players in the fight, including you (`1` = solo). For the **Theatre of Blood**, **Tombs of Amascut** and **Fractured Archive**, the number of players in the raid's party when the raid was completed. For the **Chambers of Xeric**, the team size in the game's completion message. For every other boss, you plus each other player who was within 15 tiles of you at some point between the start of the fight and the kill, including players who died or left before the end. In a public area, someone passing close by during the fight counts too. Solo-only content is always `1`. |
+| `size` | number | Players in the fight, including you (`1` = solo). For the **Chambers of Xeric**, **Theatre of Blood**, **Tombs of Amascut** and **Fractured Archive**, the number of players in the raid's party when the raid was completed. For every other boss, you plus each other player who was within 15 tiles of you at some point between the start of the fight and the kill, including players who died or left before the end. In a public area, someone passing close by during the fight counts too. Solo-only content is always `1`. |
+| `scaling` | number \| null | **Chambers of Xeric** only: the players the party added to the raid's scale with its scaling setting, read when the raid is completed. The raid scales as `size + scaling` players, e.g. `size: 2, scaling: 3` is two players in a 5-player raid. `null` for everything else. |
 
 A raid chest whose completion wasn't seen (e.g. the plugin was turned on mid-raid) has `team: null`.
 
@@ -157,7 +158,7 @@ A raid chest whose completion wasn't seen (e.g. the plugin was turned on mid-rai
     "runePouch": [{ "id": 560, "quantity": 3000 }, { "id": 565, "quantity": 1500 }],
     "quiver": null
   },
-  "team": { "size": 1 }
+  "team": { "size": 1, "scaling": null }
 }
 ```
 
@@ -194,7 +195,7 @@ A Fortis Colosseum chest claimed after wave 3:
     "runePouch": null,
     "quiver": null
   },
-  "team": { "size": 1 }
+  "team": { "size": 1, "scaling": null }
 }
 ```
 
@@ -233,7 +234,7 @@ A Fractured Archive chest:
     "runePouch": null,
     "quiver": null
   },
-  "team": { "size": 3 }
+  "team": { "size": 3, "scaling": null }
 }
 ```
 

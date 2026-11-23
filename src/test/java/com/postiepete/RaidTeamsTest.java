@@ -7,18 +7,6 @@ import org.junit.Test;
 public class RaidTeamsTest
 {
 	@Test
-	public void coxTeamSizeFromTheCompletionMessage()
-	{
-		assertEquals(Integer.valueOf(3), RaidTeams.coxTeamSize(
-			"Congratulations - your raid is complete!Team size: 3 players Duration: 21:30 Personal best: 20:00"));
-		assertEquals(Integer.valueOf(1), RaidTeams.coxTeamSize(
-			"Congratulations - your raid is complete!Team size: Solo Duration: 30:12 (new personal best)"));
-		assertEquals(Integer.valueOf(24), RaidTeams.coxTeamSize(
-			"Congratulations - your raid is complete!Team size: 24+ players Duration: 40:00"));
-		assertNull(RaidTeams.coxTeamSize("Congratulations - your raid is complete!"));
-	}
-
-	@Test
 	public void raidKillCountNamesMapToTheirChest()
 	{
 		assertEquals("Theatre of Blood", RaidTeams.chestName("Theatre of Blood: Hard Mode"));
@@ -45,7 +33,16 @@ public class RaidTeamsTest
 		// Unknown sizes don't replace it
 		teams.onCompleted("Theatre of Blood", null);
 
-		assertEquals(Integer.valueOf(4), teams.takeSize("Theatre of Blood"));
-		assertNull(teams.takeSize("Theatre of Blood"));
+		assertEquals(new LootEvent.Team(4, null), teams.takeTeam("Theatre of Blood"));
+		assertNull(teams.takeTeam("Theatre of Blood"));
+	}
+
+	@Test
+	public void chambersOfXericKeepsItsScaling()
+	{
+		RaidTeams teams = new RaidTeams();
+		teams.onCompleted("Chambers of Xeric", 3, 2);
+
+		assertEquals(new LootEvent.Team(3, 2), teams.takeTeam("Chambers of Xeric"));
 	}
 }

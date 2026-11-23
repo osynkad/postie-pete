@@ -400,10 +400,9 @@ public class PostiePetePlugin extends Plugin
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
 
-		// Raids have the game's party size, read when the raid was completed (CoX's comes from its completion
-		// message)
+		// Raids have the game's party size, read when the raid was completed
 		boolean raidChest = event.getName() != null && event.getName().equals(RaidTeams.chestName(event.getName()));
-		Integer raidSize = raidChest ? raidTeams.takeSize(event.getName()) : null;
+		LootEvent.Team raidTeam = raidChest ? raidTeams.takeTeam(event.getName()) : null;
 		bossKill |= raidChest;
 
 		// A chest with no time from the game (e.g. Barrows) is timed from the first hit. Runs and raids keep
@@ -422,7 +421,7 @@ public class PostiePetePlugin extends Plugin
 		LootEvent.Team team;
 		if (raidChest)
 		{
-			team = raidSize != null ? new LootEvent.Team(raidSize) : null;
+			team = raidTeam;
 		}
 		else
 		{
@@ -967,8 +966,7 @@ public class PostiePetePlugin extends Plugin
 
 	/**
 	 * A message to the raid's party, tags removed: the Chambers of Xeric's start, a level's completion, or the
-	 * raid's completion with its team size and time. The team size falls back to the party size the game keeps
-	 * if the message shows none.
+	 * raid's completion with its time, party size and scaling setting.
 	 */
 	private void onRaidPartyMessage(String message, int tick)
 	{
@@ -987,13 +985,11 @@ public class PostiePetePlugin extends Plugin
 
 		if (message.startsWith(RaidTeams.COX_COMPLETE_MESSAGE))
 		{
-			Integer size = RaidTeams.coxTeamSize(message);
-			if (size == null)
-			{
-				size = client.getVarbitValue(VarbitID.RAIDS_CLIENT_PARTYSIZE);
-			}
-			log.debug("Chambers of Xeric completed, team size {}", size);
-			raidTeams.onCompleted(RaidTeams.CHAMBERS_OF_XERIC, size);
+			// The players in the party, and the scaling setting the party can raise the raid's scale with
+			int size = client.getVarbitValue(VarbitID.RAIDS_CLIENT_PARTYSIZE);
+			int scaling = client.getVarbitValue(VarbitID.RAIDS_SCALING);
+			log.debug("Chambers of Xeric completed, party size {}, scaling {}", size, scaling);
+			raidTeams.onCompleted(RaidTeams.CHAMBERS_OF_XERIC, size, scaling);
 
 			// The raid's time is the chest's, and ends the Great Olm's split
 			LootEvent.KillTime raidTime = coxCompletionTime(message);

@@ -70,8 +70,9 @@ public class PostieEventTest
 			Collections.emptyList(), null, new LootEvent.Team(3)));
 
 		JsonObject team = json.getAsJsonObject("team");
-		assertEquals(set("size"), team.keySet());
+		assertEquals(set("size", "scaling"), team.keySet());
 		assertEquals(3, team.get("size").getAsInt());
+		assertEquals(true, team.get("scaling").isJsonNull());
 
 		JsonObject split = json.getAsJsonObject("source").getAsJsonArray("splits").get(1).getAsJsonObject();
 		assertEquals(set("name", "duration"), split.keySet());

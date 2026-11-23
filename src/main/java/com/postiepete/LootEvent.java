@@ -1,6 +1,7 @@
 package com.postiepete;
 
 import java.util.List;
+import lombok.AllArgsConstructor;
 import lombok.Value;
 import lombok.With;
 
@@ -191,14 +192,26 @@ class LootEvent extends PostieEvent
 	}
 
 	@Value
+	@AllArgsConstructor
 	static class Team
 	{
 		/**
-		 * Players in the team, including the sender (1 = solo). For raids, the game's party size at the raid's
-		 * start (CoX: its completion message). For other
+		 * Players in the team, including the sender (1 = solo). For raids, the game's party size. For other
 		 * bosses, the sender plus every other player who was near them at some point during the fight.
 		 */
 		int size;
+
+		/**
+		 * The players the Chambers of Xeric party added to the raid's scale with its scaling setting, read when the
+		 * raid was completed: the raid scales as size + scaling players (e.g. 2 players at scaling 3 = a 5-player
+		 * raid). Null for all other content.
+		 */
+		Integer scaling;
+
+		Team(int size)
+		{
+			this(size, null);
+		}
 	}
 
 	@Value

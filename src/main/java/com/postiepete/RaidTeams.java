@@ -2,11 +2,9 @@ package com.postiepete;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
- * The team size of each raid, read when the raid is completed and kept until its reward chest is opened. Keyed
+ * The team of each raid, read when the raid is completed and kept until its reward chest is opened. Keyed
  * by the Loot Tracker's name for the raid's chest.
  */
 class RaidTeams
@@ -20,11 +18,7 @@ class RaidTeams
 	 */
 	static final String COX_COMPLETE_MESSAGE = "Congratulations - your raid is complete!";
 
-	// "Congratulations - your raid is complete!Team size: 3 players Duration: 21:30 ...", tags removed: the same
-	// team sizes RuneLite's chat commands plugin reads. Large teams can show as e.g. "24+ players".
-	static final Pattern COX_TEAM_SIZE_PATTERN = Pattern.compile("Team size: (?:(?<size>\\d+)\\+? players?|(?<solo>Solo))");
-
-	private final Map<String, Integer> sizes = new HashMap<>();
+	private final Map<String, LootEvent.Team> teams = new HashMap<>();
 
 	/**
 	 * The Loot Tracker's chest name for a raid's kill count message name, e.g. "Theatre of Blood" for "Theatre of
@@ -44,19 +38,6 @@ class RaidTeams
 			}
 		}
 		return null;
-	}
-
-	/**
-	 * The team size in a Chambers of Xeric completion message, tags removed, or null if it shows none.
-	 */
-	static Integer coxTeamSize(String message)
-	{
-		Matcher matcher = COX_TEAM_SIZE_PATTERN.matcher(message);
-		if (!matcher.find())
-		{
-			return null;
-		}
-		return matcher.group("solo") != null ? 1 : Integer.valueOf(matcher.group("size"));
 	}
 
 	/**
@@ -80,22 +61,31 @@ class RaidTeams
 	 */
 	void onCompleted(String chestName, Integer size)
 	{
+		onCompleted(chestName, size, null);
+	}
+
+	/**
+	 * Called when a raid is completed, with its chest's name, team size (ignored when unknown or 0) and the
+	 * party's scaling setting, for the Chambers of Xeric.
+	 */
+	void onCompleted(String chestName, Integer size, Integer scaling)
+	{
 		if (chestName != null && size != null && size > 0)
 		{
-			sizes.put(chestName, size);
+			teams.put(chestName, new LootEvent.Team(size, scaling));
 		}
 	}
 
 	/**
-	 * The team size for the raid's chest, or null if the raid's completion wasn't seen. Consumed.
+	 * The team for the raid's chest, or null if the raid's completion wasn't seen. Consumed.
 	 */
-	Integer takeSize(String chestName)
+	LootEvent.Team takeTeam(String chestName)
 	{
-		return chestName != null ? sizes.remove(chestName) : null;
+		return chestName != null ? teams.remove(chestName) : null;
 	}
 
 	void reset()
 	{
-		sizes.clear();
+		teams.clear();
 	}
 }
