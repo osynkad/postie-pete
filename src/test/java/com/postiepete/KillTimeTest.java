@@ -90,37 +90,6 @@ public class KillTimeTest
 	}
 
 	@Test
-	public void theatreOfBloodTimeIsTheCompletionTimeInVerziksRoomMessage()
-	{
-		LootEvent.KillTime time = PostiePetePlugin.tobCompletionTime(
-			"Wave 'The Final Challenge' (Normal Mode) complete!<br>Duration: <col=ff0000>5:18.00</col><br>"
-				+ "Theatre of Blood completion time: <col=ff0000>18:23.40</col>. Personal best: 16:00.60");
-		assertEquals(1103.4, time.getDuration(), 1e-9);
-		assertEquals(960.6, time.getPersonalBest(), 1e-9);
-		assertFalse(time.isNewPersonalBest());
-	}
-
-	@Test
-	public void theatreOfBloodNewPersonalBest()
-	{
-		LootEvent.KillTime time = PostiePetePlugin.tobCompletionTime(
-			"Wave 'The Final Challenge' (Hard Mode) complete!<br>Duration: <col=ff0000>5:18.00</col><br>"
-				+ "Theatre of Blood: Hard Mode completion time: <col=ff0000>24:10.20</col> (new personal best)");
-		assertEquals(1450.2, time.getDuration(), 1e-9);
-		assertTrue(time.isNewPersonalBest());
-	}
-
-	@Test
-	public void theatreOfBloodRoomsBeforeVerzikHaveNoCompletionTime()
-	{
-		assertNull(PostiePetePlugin.tobCompletionTime(
-			"Wave 'Xarpus' (Normal Mode) complete!<br>Duration: <col=ff0000>3:06.60</col><br>"
-				+ "Total: <col=ff0000>13:05.40</col>"));
-		assertNull(PostiePetePlugin.tobCompletionTime(
-			"Theatre of Blood total completion time: <col=ff0000>20:52.80</col>. Personal best: 17:53.40"));
-	}
-
-	@Test
 	public void raidCompletionTimesBelongToTheirChest()
 	{
 		assertEquals("Theatre of Blood", PostiePetePlugin.killTimeRaid(

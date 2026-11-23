@@ -1,6 +1,7 @@
 package com.postiepete;
 
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -16,6 +17,11 @@ class ChambersOfXeric
 	 * Sent to the raid's party when the raid starts.
 	 */
 	static final String RAID_START_MESSAGE = "The raid has begun!";
+
+	/**
+	 * Sent to the raid's party when the raid is completed.
+	 */
+	static final String RAID_COMPLETE_MESSAGE = "Congratulations - your raid is complete!";
 
 	// "Upper level complete! Duration: 7:01", tags removed, sent to the raid's party: the time since the raid
 	// began. The CoX timers hub plugin reads the same message, adding the level's own time to it.
@@ -41,6 +47,15 @@ class ChambersOfXeric
 	private Double lastLevelEnd;
 	private boolean levelSeen;
 	private LootEvent.Points points;
+
+	/**
+	 * The raid's time and personal best in its completion message, tags removed, or null if it shows none.
+	 */
+	static LootEvent.KillTime completionTime(String message)
+	{
+		Matcher matcher = COMPLETION_TIME_PATTERN.matcher(message);
+		return matcher.find() ? PostiePetePlugin.parseKillTime(matcher) : null;
+	}
 
 	void onRaidStarted()
 	{

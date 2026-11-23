@@ -151,17 +151,6 @@ public class PostiePetePlugin extends Plugin
 	private static final Pattern TFA_BOSS_COMPLETE_PATTERN = Pattern.compile(
 		"Challenge complete: (?<boss>.+?)\\. Duration: (?<time>[0-9:]+(?:\\.[0-9]+)?)");
 
-	// "Wave 'The Maiden of Sugadinti' (Normal Mode) complete!Duration: 2:05.40Total: 2:05.40", tags removed: a
-	// Theatre of Blood room's completion. Verzik's room is "The Final Challenge".
-	static final Pattern TOB_ROOM_COMPLETE_PATTERN = Pattern.compile(
-		"Wave '(?<room>.+?)' \\([^)]*\\) complete!Duration: (?<time>[0-9:]+(?:\\.[0-9]+)?)");
-
-	// The first Theatre of Blood room. The raid has no start message, so its completion starts the run.
-	static final String TOB_FIRST_ROOM = "The Maiden of Sugadinti";
-
-	// Where the raid's completion time starts in Verzik's room message, in lower case
-	private static final String TOB_COMPLETION_TIME = "completion time:";
-
 	private static final String COLOSSEUM = "Fortis Colosseum";
 	private static final String SOL_HEREDIT = "Sol Heredit";
 	private static final String DOOM_OF_MOKHAIOTL = "Doom of Mokhaiotl";
@@ -229,7 +218,7 @@ public class PostiePetePlugin extends Plugin
 	private final WaveRun inferno = new WaveRun("Wave");
 
 	private final RaidSplits fracturedArchive = new RaidSplits();
-	private final RaidSplits theatreOfBlood = new RaidSplits();
+	private final TheatreOfBlood theatreOfBlood = new TheatreOfBlood();
 	private final ChambersOfXeric chambersOfXeric = new ChambersOfXeric();
 
 	private final TripGear tripGear = new TripGear();
@@ -384,7 +373,6 @@ public class PostiePetePlugin extends Plugin
 		}
 		else if (RaidTeams.THEATRE_OF_BLOOD.equals(event.getName()))
 		{
-			// The run so far: the chest is in Verzik's room, so no new run can start before it's opened
 			splits = theatreOfBlood.consumeSplits();
 		}
 		else if (RaidTeams.CHAMBERS_OF_XERIC.equals(event.getName()))
@@ -898,16 +886,9 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		// Also checked before KILL_DURATION_PATTERN: a room's duration isn't the raid's time
-		matcher = TOB_ROOM_COMPLETE_PATTERN.matcher(message);
-		if (matcher.lookingAt())
+		if (theatreOfBlood.onRoomMessage(message))
 		{
-			String room = matcher.group("room");
-			if (room.equals(TOB_FIRST_ROOM))
-			{
-				theatreOfBlood.onRunStarted();
-			}
-			theatreOfBlood.onBossCompleted(room, parseDuration(matcher.group("time")));
-			LootEvent.KillTime completionTime = tobCompletionTime(event.getMessage());
+			LootEvent.KillTime completionTime = TheatreOfBlood.completionTime(event.getMessage());
 			if (completionTime != null)
 			{
 				setKillTime(completionTime, tick, RaidTeams.THEATRE_OF_BLOOD);
@@ -983,7 +964,7 @@ public class PostiePetePlugin extends Plugin
 			return;
 		}
 
-		if (message.startsWith(RaidTeams.COX_COMPLETE_MESSAGE))
+		if (message.startsWith(ChambersOfXeric.RAID_COMPLETE_MESSAGE))
 		{
 			// The players in the party, and the scaling setting the party can raise the raid's scale with
 			int size = client.getVarbitValue(VarbitID.RAIDS_CLIENT_PARTYSIZE);
@@ -992,7 +973,7 @@ public class PostiePetePlugin extends Plugin
 			raidTeams.onCompleted(RaidTeams.CHAMBERS_OF_XERIC, size, scaling);
 
 			// The raid's time is the chest's, and ends the Great Olm's split
-			LootEvent.KillTime raidTime = coxCompletionTime(message);
+			LootEvent.KillTime raidTime = ChambersOfXeric.completionTime(message);
 			if (raidTime != null)
 			{
 				setKillTime(raidTime, tick, RaidTeams.CHAMBERS_OF_XERIC);
@@ -1001,16 +982,6 @@ public class PostiePetePlugin extends Plugin
 			chambersOfXeric.onRaidCompleted(raidTime != null ? raidTime.getDuration() : null,
 				client.getVarbitValue(VarbitID.RAIDS_CLIENT_PARTYSCORE), client.getVarpValue(VarPlayerID.RAIDS_PLAYERSCORE));
 		}
-	}
-
-	/**
-	 * The raid's time and personal best in a Chambers of Xeric completion message, tags removed, or null if it
-	 * shows none.
-	 */
-	static LootEvent.KillTime coxCompletionTime(String message)
-	{
-		Matcher matcher = ChambersOfXeric.COMPLETION_TIME_PATTERN.matcher(message);
-		return matcher.find() ? parseKillTime(matcher) : null;
 	}
 
 	/**
@@ -1203,27 +1174,6 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * The raid's completion time in a Theatre of Blood room message, or null if it has none. Verzik's room message
-	 * ends with it, after the room's own duration (seen in game): "Wave 'The Final Challenge' (Normal Mode)
-	 * complete!&lt;br&gt;Duration: &lt;col=ff0000&gt;5:18.00&lt;/col&gt;&lt;br&gt;Theatre of Blood completion time:
-	 * &lt;col=ff0000&gt;18:23.40&lt;/col&gt;. Personal best: 16:00.60". The room's duration isn't the raid's time, so
-	 * only the part from "completion time:" on is read.
-	 */
-	static LootEvent.KillTime tobCompletionTime(String message)
-	{
-		int start = message.toLowerCase().indexOf(TOB_COMPLETION_TIME);
-		if (start < 0)
-		{
-			return null;
-		}
-		Matcher matcher = KILL_DURATION_PATTERN.matcher(message);
-		matcher.region(start, message.length());
-		// So the pattern can still see a "total " in front, which marks the time it ignores
-		matcher.useTransparentBounds(true);
-		return matcher.lookingAt() ? parseKillTime(matcher) : null;
-	}
-
-	/**
 	 * A duration the game reports no personal best with, or null if there is none.
 	 */
 	private static LootEvent.KillTime withoutPersonalBest(Double duration)
@@ -1234,7 +1184,7 @@ public class PostiePetePlugin extends Plugin
 	/**
 	 * Parses "1:23", "1:23.40" or "1:02:03.40" into seconds.
 	 */
-	private static double parseDuration(String duration)
+	static double parseDuration(String duration)
 	{
 		String[] parts = duration.split(":");
 		double seconds = 0;

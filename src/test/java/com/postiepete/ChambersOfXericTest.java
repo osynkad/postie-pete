@@ -102,20 +102,20 @@ public class ChambersOfXericTest
 	@Test
 	public void raidTimeFromTheCompletionMessage()
 	{
-		LootEvent.KillTime time = PostiePetePlugin.coxCompletionTime(Text.removeTags(
+		LootEvent.KillTime time = ChambersOfXeric.completionTime(Text.removeTags(
 			"<col=ef20ff>Congratulations - your raid is complete!</col><br>Team size: <col=ff0000>3 players</col>"
 				+ " Duration:</col> <col=ff0000>21:30</col> Personal best: </col><col=ff0000>20:00</col>"));
 		assertEquals(1290.0, time.getDuration(), 1e-9);
 		assertEquals(1200.0, time.getPersonalBest(), 1e-9);
 		assertFalse(time.isNewPersonalBest());
 
-		time = PostiePetePlugin.coxCompletionTime(Text.removeTags(
+		time = ChambersOfXeric.completionTime(Text.removeTags(
 			"<col=ef20ff>Congratulations - your raid is complete!</col><br>Team size: <col=ff0000>Solo</col>"
 				+ " Duration:</col> <col=ff0000>30:12.60</col> (new personal best)</col>"));
 		assertEquals(1812.6, time.getDuration(), 1e-9);
 		assertTrue(time.isNewPersonalBest());
 
-		assertNull(PostiePetePlugin.coxCompletionTime("Congratulations - your raid is complete!"));
+		assertNull(ChambersOfXeric.completionTime("Congratulations - your raid is complete!"));
 	}
 
 	private static void assertSplits(List<LootEvent.Split> actual, LootEvent.Split... expected)

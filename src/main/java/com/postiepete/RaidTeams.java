@@ -13,11 +13,6 @@ class RaidTeams
 	static final String THEATRE_OF_BLOOD = "Theatre of Blood";
 	static final String TOMBS_OF_AMASCUT = "Tombs of Amascut";
 
-	/**
-	 * Sent to the raid's party when a Chambers of Xeric raid is completed.
-	 */
-	static final String COX_COMPLETE_MESSAGE = "Congratulations - your raid is complete!";
-
 	private final Map<String, LootEvent.Team> teams = new HashMap<>();
 
 	/**
