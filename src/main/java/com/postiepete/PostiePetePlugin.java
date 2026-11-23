@@ -217,6 +217,8 @@ public class PostiePetePlugin extends Plugin
 
 	private LootEvent.KillTime lastKillTime;
 	private int lastKillTimeTick;
+	// The raid chest lastKillTime is kept for when it is a raid's completion time, otherwise null
+	private String lastKillTimeRaid;
 
 	private Integer lastDoomLevel;
 	private Double doomFullRunDuration;
@@ -279,6 +281,7 @@ public class PostiePetePlugin extends Plugin
 	protected void shutDown() throws Exception
 	{
 		lastKillTime = null;
+		lastKillTimeRaid = null;
 		lastDoomLevel = null;
 		doomFullRunDuration = null;
 		colosseum.reset();
@@ -328,7 +331,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		int tick = client.getTickCount();
-		LootEvent.KillTime completionTime = consumeKillTime(chestKillTimeMaxAge(event.getName()));
+		LootEvent.KillTime completionTime = consumeKillTime(event.getName(), chestKillTimeMaxAge(event.getName()));
 		Integer fightTimeStart = fightStartTick(completionTime);
 		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), tick);
 		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
@@ -426,7 +429,7 @@ public class PostiePetePlugin extends Plugin
 	{
 		// Consumed even when loot isn't sent, so it can't be attached to a later kill
 		int tick = client.getTickCount();
-		LootEvent.KillTime killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		LootEvent.KillTime killTime = consumeKillTime(null, KILL_TIME_MAX_AGE_TICKS);
 		Integer fightTimeStart = fightStartTick(killTime);
 		LootEvent.Kill kill = killCounts.claimForNpcLoot(tick);
 		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
@@ -547,7 +550,7 @@ public class PostiePetePlugin extends Plugin
 	private void onKillWithoutLoot(LootEvent.Kill kill)
 	{
 		// Consumed even when loot isn't sent, so they can't be attached to a later kill
-		LootEvent.KillTime killTime = consumeKillTime(KILL_TIME_MAX_AGE_TICKS);
+		LootEvent.KillTime killTime = consumeKillTime(null, KILL_TIME_MAX_AGE_TICKS);
 		Integer fightTimeStart = fightStartTick(killTime);
 		Integer firstHit = fightStarts.take(kill.getName(), client.getTickCount());
 		WaveRun.Run run = null;
@@ -899,8 +902,7 @@ public class PostiePetePlugin extends Plugin
 			LootEvent.KillTime completionTime = tobCompletionTime(event.getMessage());
 			if (completionTime != null)
 			{
-				lastKillTime = completionTime;
-				lastKillTimeTick = tick;
+				setKillTime(completionTime, tick, RaidTeams.THEATRE_OF_BLOOD);
 			}
 			return;
 		}
@@ -908,8 +910,7 @@ public class PostiePetePlugin extends Plugin
 		matcher = KILL_DURATION_PATTERN.matcher(event.getMessage());
 		if (matcher.find())
 		{
-			lastKillTime = parseKillTime(matcher);
-			lastKillTimeTick = tick;
+			setKillTime(parseKillTime(matcher), tick, killTimeRaid(message));
 			return;
 		}
 
@@ -1094,17 +1095,50 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * Returns the last reported duration if it is recent enough, and consumes it so it
-	 * can't be attached to a later, unrelated event.
+	 * Keeps a kill or completion time for the loot that follows. A raid's completion time is kept for the raid's
+	 * chest (raidChest), so other loot can't take it.
 	 */
-	private LootEvent.KillTime consumeKillTime(int maxAgeTicks)
+	private void setKillTime(LootEvent.KillTime killTime, int tick, String raidChest)
 	{
+		lastKillTime = killTime;
+		lastKillTimeTick = tick;
+		lastKillTimeRaid = raidChest;
+	}
+
+	/**
+	 * The raid chest a kill time message, tags removed, is the completion time of, or null if it is not a raid's:
+	 * e.g. "Theatre of Blood" for "Theatre of Blood completion time: ...", or "Fractured Archive" for "The
+	 * Fractured Archive: Total completion time: ...".
+	 */
+	static String killTimeRaid(String message)
+	{
+		String raid = RaidTeams.chestName(message);
+		if (raid == null && message.startsWith("The " + FracturedArchive.LOOT_SOURCE))
+		{
+			raid = FracturedArchive.LOOT_SOURCE;
+		}
+		return raid;
+	}
+
+	/**
+	 * Returns the last reported duration if it is recent enough, and consumes it so it can't be attached to a
+	 * later, unrelated event. A raid's completion time is only for its own chest (lootName): other loot gets
+	 * none and leaves it, so e.g. the Patient Record Verzik drops to one player can't take the Theatre of Blood's
+	 * time from its chest.
+	 */
+	private LootEvent.KillTime consumeKillTime(String lootName, int maxAgeTicks)
+	{
+		if (lastKillTimeRaid != null && !lastKillTimeRaid.equals(lootName))
+		{
+			return null;
+		}
 		LootEvent.KillTime killTime = null;
 		if (lastKillTime != null && client.getTickCount() - lastKillTimeTick <= maxAgeTicks)
 		{
 			killTime = lastKillTime;
 		}
 		lastKillTime = null;
+		lastKillTimeRaid = null;
 		return killTime;
 	}
 

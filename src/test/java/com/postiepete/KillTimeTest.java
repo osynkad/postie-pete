@@ -120,6 +120,18 @@ public class KillTimeTest
 			"Theatre of Blood total completion time: <col=ff0000>20:52.80</col>. Personal best: 17:53.40"));
 	}
 
+	@Test
+	public void raidCompletionTimesBelongToTheirChest()
+	{
+		assertEquals("Theatre of Blood", PostiePetePlugin.killTimeRaid(
+			"Theatre of Blood completion time: 17:29.40. Personal best: 17:22.00"));
+		assertEquals("Tombs of Amascut", PostiePetePlugin.killTimeRaid(
+			"Tombs of Amascut: Expert Mode challenge completion time: 25:10.20. Personal best: 24:01.80"));
+		assertEquals("Fractured Archive", PostiePetePlugin.killTimeRaid(
+			"The Fractured Archive: Total completion time: 18:05.80"));
+		assertNull(PostiePetePlugin.killTimeRaid("Fight duration: 1:23.40. Personal best: 1:20.00"));
+	}
+
 	private static LootEvent.KillTime parse(String message)
 	{
 		Matcher matcher = PostiePetePlugin.KILL_DURATION_PATTERN.matcher(message);
