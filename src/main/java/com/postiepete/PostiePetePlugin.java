@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -21,16 +22,23 @@ import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.CollisionData;
+import net.runelite.api.CollisionDataFlag;
+import net.runelite.api.Constants;
 import net.runelite.api.EnumComposition;
 import net.runelite.api.EnumID;
 import net.runelite.api.EquipmentInventorySlot;
+import net.runelite.api.GameObject;
 import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
+import net.runelite.api.Point;
+import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
@@ -220,6 +228,7 @@ public class PostiePetePlugin extends Plugin
 	private final RaidSplits fracturedArchive = new RaidSplits();
 	private final TheatreOfBlood theatreOfBlood = new TheatreOfBlood();
 	private final ChambersOfXeric chambersOfXeric = new ChambersOfXeric();
+	private final CoxRooms coxRooms = new CoxRooms();
 
 	private final TripGear tripGear = new TripGear();
 	private final FightStarts fightStarts = new FightStarts();
@@ -281,6 +290,7 @@ public class PostiePetePlugin extends Plugin
 		fracturedArchive.reset();
 		theatreOfBlood.reset();
 		chambersOfXeric.reset();
+		coxRooms.reset();
 		killCounts.reset();
 		tripGear.end();
 		fightStarts.reset();
@@ -535,6 +545,71 @@ public class PostiePetePlugin extends Plugin
 		if (killWithoutLoot != null)
 		{
 			onKillWithoutLoot(killWithoutLoot);
+		}
+
+		checkCoxRooms();
+	}
+
+	@Subscribe
+	public void onGameObjectSpawned(GameObjectSpawned event)
+	{
+		GameObject object = event.getGameObject();
+		if (!CoxRooms.isObstacle(object.getId()))
+		{
+			return;
+		}
+		WorldView worldView = client.getTopLevelWorldView();
+		if (!worldView.isInstance())
+		{
+			return;
+		}
+		Point scene = object.getSceneMinLocation();
+		int plane = object.getPlane();
+		String room = CoxRooms.roomName(
+			worldView.getInstanceTemplateChunks()[plane][scene.getX() / Constants.CHUNK_SIZE][scene.getY() / Constants.CHUNK_SIZE]);
+		if (room != null)
+		{
+			coxRooms.onObstacleSpawned(room,
+				new WorldPoint(worldView.getBaseX() + scene.getX(), worldView.getBaseY() + scene.getY(), plane));
+		}
+	}
+
+	/**
+	 * Completes each Chambers of Xeric room whose obstacle has stopped blocking its tile. A room whose obstacle is
+	 * out of view isn't followed any further, so its time goes to the next room's.
+	 */
+	private void checkCoxRooms()
+	{
+		if (coxRooms.obstacles().isEmpty())
+		{
+			return;
+		}
+		WorldView worldView = client.getTopLevelWorldView();
+		CollisionData[] collisionMaps = worldView.getCollisionMaps();
+		Iterator<Map.Entry<String, WorldPoint>> obstacles = coxRooms.obstacles().entrySet().iterator();
+		while (obstacles.hasNext())
+		{
+			Map.Entry<String, WorldPoint> obstacle = obstacles.next();
+			WorldPoint location = obstacle.getValue();
+			int x = location.getX() - worldView.getBaseX();
+			int y = location.getY() - worldView.getBaseY();
+			if (collisionMaps == null || location.getPlane() != worldView.getPlane())
+			{
+				obstacles.remove();
+				continue;
+			}
+			int[][] flags = collisionMaps[location.getPlane()].getFlags();
+			if (x < 0 || x >= flags.length || y < 0 || y >= flags[x].length)
+			{
+				obstacles.remove();
+			}
+			else if ((flags[x][y] & CollisionDataFlag.BLOCK_MOVEMENT_OBJECT) == 0)
+			{
+				int raidTicks = client.getVarbitValue(VarbitID.RAIDS_TIMER);
+				log.debug("Chambers of Xeric room {} completed at {} ticks", obstacle.getKey(), raidTicks);
+				chambersOfXeric.onRoomCompleted(obstacle.getKey(), raidTicks);
+				obstacles.remove();
+			}
 		}
 	}
 
@@ -960,7 +1035,8 @@ public class PostiePetePlugin extends Plugin
 		Matcher matcher = ChambersOfXeric.LEVEL_COMPLETE_PATTERN.matcher(message);
 		if (matcher.find())
 		{
-			chambersOfXeric.onLevelCompleted(matcher.group("level"), parseDuration(matcher.group("time")));
+			chambersOfXeric.onLevelCompleted(matcher.group("level"), parseDuration(matcher.group("time")),
+				client.getVarbitValue(VarbitID.RAIDS_TIMER));
 			return;
 		}
 

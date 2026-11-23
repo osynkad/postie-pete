@@ -5,8 +5,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Follows a Chambers of Xeric raid, Challenge Mode included: each level's time and the Great Olm's, and the raid's
- * points, so they can be sent with the reward chest's loot, which is opened some time later.
+ * Follows a Chambers of Xeric raid, Challenge Mode included: each room's and level's time, the Great Olm's,
+ * and the raid's points, so they can be sent with the reward chest's loot, which is opened some time later.
  * <p>
  * The game tells the party the time since the raid began at the end of each level, and the raid's time on its
  * completion, so each part's own time is the difference from the one before.
@@ -48,6 +48,10 @@ class ChambersOfXeric
 	private boolean levelSeen;
 	private LootEvent.Points points;
 
+	// The raid timer's ticks when the next room's time started: at the raid's or the level's start, or the last
+	// room's completion. Null when unknown.
+	private Integer roomStartTicks;
+
 	/**
 	 * The raid's time and personal best in its completion message, tags removed, or null if it shows none.
 	 */
@@ -62,13 +66,28 @@ class ChambersOfXeric
 		splits.onRunStarted();
 		lastLevelEnd = 0.0;
 		levelSeen = false;
+		roomStartTicks = 0;
 	}
 
 	/**
-	 * Called on a level's completion message, with the level as the game names it (e.g. "Upper") and the time
-	 * since the raid began in seconds.
+	 * Called when a room is completed, with the raid timer's ticks at that time. Added to the splits in the order
+	 * completed, before its level's. The room's time runs from the last room's completion or the level's start, so
+	 * it includes getting to the room.
 	 */
-	void onLevelCompleted(String level, double raidTime)
+	void onRoomCompleted(String room, int raidTicks)
+	{
+		if (roomStartTicks != null && raidTicks >= roomStartTicks)
+		{
+			splits.onBossCompleted(room, (raidTicks - roomStartTicks) * 6 / 10.0);
+		}
+		roomStartTicks = raidTicks;
+	}
+
+	/**
+	 * Called on a level's completion message, with the level as the game names it (e.g. "Upper"), the time since
+	 * the raid began in seconds as the message shows it, and the raid timer's ticks.
+	 */
+	void onLevelCompleted(String level, double raidTime, int raidTicks)
 	{
 		if (lastLevelEnd != null && raidTime >= lastLevelEnd)
 		{
@@ -76,6 +95,7 @@ class ChambersOfXeric
 		}
 		lastLevelEnd = raidTime;
 		levelSeen = true;
+		roomStartTicks = raidTicks;
 	}
 
 	/**
@@ -92,6 +112,7 @@ class ChambersOfXeric
 		points = totalPoints > 0 ? new LootEvent.Points(totalPoints, personalPoints) : null;
 		lastLevelEnd = null;
 		levelSeen = false;
+		roomStartTicks = null;
 	}
 
 	/**
@@ -118,5 +139,6 @@ class ChambersOfXeric
 		lastLevelEnd = null;
 		levelSeen = false;
 		points = null;
+		roomStartTicks = null;
 	}
 }

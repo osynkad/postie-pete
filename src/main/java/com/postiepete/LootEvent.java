@@ -162,9 +162,9 @@ class LootEvent extends PostieEvent
 	static class Split
 	{
 		/**
-		 * The part of the run: "Wave 3" (Colosseum, Fight Caves, Inferno), "Level 22" (Doom delve level), "Upper
-		 * level" or "Great Olm" (Chambers of Xeric), or the room or boss as the game writes it in its completion
-		 * message, e.g. "Xarpus" (Theatre of Blood) or "Bork" (Fractured Archive).
+		 * The part of the run: "Wave 3" (Colosseum, Fight Caves, Inferno), "Level 22" (Doom delve level), "Tekton",
+		 * "Upper level" or "Great Olm" (Chambers of Xeric, each level after its rooms), or the room or boss as the
+		 * game writes it in its completion message, e.g. "Xarpus" (Theatre of Blood) or "Bork" (Fractured Archive).
 		 */
 		String name;
 

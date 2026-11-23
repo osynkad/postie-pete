@@ -94,9 +94,31 @@ What `duration` covers, and whether the splits add up to `source.duration`:
 | Fortis Colosseum | `"Wave 1"` – `"Wave 12"` | The time the game printed for the wave. Wave 12's message shows the whole run's time instead, so wave 12 is that time less waves 1–11, and is left out if any of them is missing. | Yes, for a full run with every wave seen, since wave 12 is worked out from the run time. |
 | Doom of Mokhaiotl | `"Level 1"`, `"Level 2"` … | The time the game printed for the delve level. | No: `source.duration` stops at the end of level 8, while splits go on to the deepest level reached. |
 | Fight Caves, Inferno | `"Wave 1"` – `"Wave 63"` / `"Wave 69"` | Counted in game ticks (0.6 seconds each) from the wave's start message to the next one's, so the time between waves is included. The last wave ends at the kill count message. | Close to it, when every wave was seen. |
-| Chambers of Xeric | the level, e.g. `"Upper level"`, `"Lower level"`, then `"Great Olm"` | The game prints the raid's time so far at the end of each level, so a level's time is that less the level before's, and the Great Olm's is the raid's time less the last level's. If the raid's start wasn't seen, the first level seen is left out, and the Great Olm if no level or no raid time was. Challenge Mode is the same. | Yes, when the whole raid was seen. |
+| Chambers of Xeric | the rooms (e.g. `"Tekton"`, `"Ice demon"`, see [below](#chambers-of-xeric-rooms)) and levels (e.g. `"Upper level"`, `"Lower level"`), then `"Great Olm"`, in the order completed: each level after its rooms | The game prints the raid's time so far at the end of each level, so a level's time is that less the level before's, and the Great Olm's is the raid's time less the last level's. If the raid's start wasn't seen, the first level seen is left out, and the Great Olm if no level or no raid time was. Challenge Mode is the same. | The levels and `"Great Olm"` do, when the whole raid was seen. The rooms overlap their level, so leave them out when adding up. |
 | Theatre of Blood | the room: `"The Maiden of Sugadinti"`, `"The Pestilent Bloat"`, `"The Nylocas"`, `"Sotetseg"`, `"Xarpus"`, `"The Final Challenge"` (Verzik) | The room's time as the game printed it, in every mode. | Yes, when every room was seen: `source.duration` is the game's completion time, which leaves out the time between rooms (not its total completion time, which includes it). |
 | Fractured Archive | the boss, e.g. `"Archive Guardian"`, `"Bork"` | The boss's time as the game printed it. The 2nd to 4th boss are the path picked. | No: the time between bosses isn't included. |
+
+#### Chambers of Xeric rooms
+
+The game doesn't print room times, so the plugin works them out the way the CoX Timers hub plugin does: a room is complete when its crystal or barrier stops blocking the way on. Rooms and levels come in one list, in the order they were completed, so each level's split comes right after its rooms:
+
+```json
+"splits": [
+  { "name": "Tekton", "duration": 218.4 },
+  { "name": "Ice demon", "duration": 240.0 },
+  { "name": "Upper level", "duration": 520.2 },
+  { "name": "Vasa", "duration": 180.0 },
+  { "name": "Middle level", "duration": 280.2 },
+  ...
+  { "name": "Great Olm", "duration": 199.8 }
+]
+```
+
+Levels end in `" level"` and the last split is `"Great Olm"`; every other split is a room.
+
+- **Names:** `"Tekton"`, `"Muttadiles"`, `"Vanguards"`, `"Vasa"`, `"Vespula"`, `"Guardians"`, `"Mystics"`, `"Shamans"` (combat), and `"Ice demon"`, `"Thieving"`, `"Tightrope"`, `"Crabs"` (puzzles). Scavengers and farming rooms have nothing to complete, so they never appear.
+- **`duration`:** counted with the raid's timer, from the last room's completion (or the level's start) to this room's, so it includes getting to the room and any scavenging on the way. A room whose crystal opened while it wasn't in view (e.g. a teammate cleared it on the other side of the level) is left out, and its time goes to the next room. If the raid's start wasn't seen, the first room seen is left out too.
+- **Adding up:** a level's rooms add up to less than the level's `duration`, since the time from its last room to the level's end isn't in any room. The levels and `"Great Olm"` add up to `source.duration`.
 
 #### Player items
 
