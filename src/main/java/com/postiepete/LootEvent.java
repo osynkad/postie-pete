@@ -2,6 +2,7 @@ package com.postiepete;
 
 import java.util.List;
 import lombok.Value;
+import lombok.With;
 
 /**
  * Loot from an NPC kill, a raid or reward chest, a clue casket etc.
@@ -88,10 +89,17 @@ class LootEvent extends PostieEvent
 
 		/**
 		 * The run's parts in the order played, for the Fortis Colosseum, Doom of Mokhaiotl, the Fight Caves, the
-		 * Inferno and the Fractured Archive. Null for all other loot, and when none were seen (e.g. the plugin
-		 * was turned on mid-run).
+		 * Inferno, the Chambers of Xeric, the Theatre of Blood and the Fractured Archive. Null for all other loot,
+		 * and when none were seen (e.g. the plugin was turned on mid-run).
 		 */
 		List<Split> splits;
+
+		/**
+		 * The raid's points, for the Chambers of Xeric. Null for all other loot, and when the raid's completion
+		 * wasn't seen.
+		 */
+		@With
+		Points points;
 
 		/**
 		 * Builds the source from the Loot Tracker's name and the kill count message that came with the loot, if
@@ -107,7 +115,8 @@ class LootEvent extends PostieEvent
 				killTime != null ? killTime.getPersonalBest() : null,
 				killTime != null && killTime.isNewPersonalBest(),
 				wave,
-				splits != null && !splits.isEmpty() ? splits : null);
+				splits != null && !splits.isEmpty() ? splits : null,
+				null);
 		}
 	}
 
@@ -152,8 +161,9 @@ class LootEvent extends PostieEvent
 	static class Split
 	{
 		/**
-		 * The part of the run: "Wave 3" (Colosseum, Fight Caves, Inferno), "Level 22" (Doom delve level), or the
-		 * boss as the game writes it in its completion message, e.g. "Bork" (Fractured Archive).
+		 * The part of the run: "Wave 3" (Colosseum, Fight Caves, Inferno), "Level 22" (Doom delve level), "Upper
+		 * level" or "Great Olm" (Chambers of Xeric), or the room or boss as the game writes it in its completion
+		 * message, e.g. "Xarpus" (Theatre of Blood) or "Bork" (Fractured Archive).
 		 */
 		String name;
 
@@ -161,6 +171,23 @@ class LootEvent extends PostieEvent
 		 * The part's duration in seconds, e.g. 141.0. What it covers depends on the content: see the README.
 		 */
 		double duration;
+	}
+
+	/**
+	 * A Chambers of Xeric raid's points when it was completed, which set the chance of a unique.
+	 */
+	@Value
+	static class Points
+	{
+		/**
+		 * The whole party's points.
+		 */
+		int total;
+
+		/**
+		 * The sender's own points.
+		 */
+		int personal;
 	}
 
 	@Value

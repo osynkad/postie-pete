@@ -24,7 +24,8 @@ public class PostieEventTest
 	private static final Set<String> COMMON_FIELDS = set("eventType", "timestamp", "rsn", "accountHash");
 
 	private static final List<String> SOURCE_FIELDS = Arrays.asList(
-		"name", "lootName", "npcId", "killCount", "duration", "personalBest", "newPersonalBest", "wave", "splits");
+		"name", "lootName", "npcId", "killCount", "duration", "personalBest", "newPersonalBest", "wave", "splits",
+		"points");
 
 	@Test
 	public void lootEventHasOnlyLootFields()
@@ -156,6 +157,19 @@ public class PostieEventTest
 		assertEquals("The Leviathan", LootEvent.Source.of("The Leviathan", new LootEvent.Kill("Leviathan", 120),
 			12214, null, null, null).getLootName());
 		assertEquals(new HashSet<>(SOURCE_FIELDS), json.keySet());
+	}
+
+	@Test
+	public void chambersOfXericLootSendsItsPoints()
+	{
+		LootEvent.Source source = LootEvent.Source.of("Chambers of Xeric",
+			new LootEvent.Kill("Chambers of Xeric Challenge Mode", 12), null, null, null, null)
+			.withPoints(new LootEvent.Points(31250, 12800));
+
+		JsonObject points = GSON.toJsonTree(source).getAsJsonObject().getAsJsonObject("points");
+		assertEquals(31250, points.get("total").getAsInt());
+		assertEquals(12800, points.get("personal").getAsInt());
+		assertEquals(null, LootEvent.Source.of("Vorkath", null, 8061, null, null, null).getPoints());
 	}
 
 	@Test

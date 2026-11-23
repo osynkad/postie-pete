@@ -230,6 +230,7 @@ public class PostiePetePlugin extends Plugin
 
 	private final RaidSplits fracturedArchive = new RaidSplits();
 	private final RaidSplits theatreOfBlood = new RaidSplits();
+	private final ChambersOfXeric chambersOfXeric = new ChambersOfXeric();
 
 	private final TripGear tripGear = new TripGear();
 	private final FightStarts fightStarts = new FightStarts();
@@ -290,6 +291,7 @@ public class PostiePetePlugin extends Plugin
 		inferno.reset();
 		fracturedArchive.reset();
 		theatreOfBlood.reset();
+		chambersOfXeric.reset();
 		killCounts.reset();
 		tripGear.end();
 		fightStarts.reset();
@@ -337,6 +339,7 @@ public class PostiePetePlugin extends Plugin
 		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
 		Integer wave = null;
 		List<LootEvent.Split> splits = null;
+		LootEvent.Points points = null;
 		WaveRun.Run run = null;
 		// Chests with a kill count message are boss kills, and so are these activities' chests without one
 		boolean bossKill = kill != null;
@@ -384,6 +387,11 @@ public class PostiePetePlugin extends Plugin
 			// The run so far: the chest is in Verzik's room, so no new run can start before it's opened
 			splits = theatreOfBlood.consumeSplits();
 		}
+		else if (RaidTeams.CHAMBERS_OF_XERIC.equals(event.getName()))
+		{
+			splits = chambersOfXeric.consumeSplits();
+			points = chambersOfXeric.consumePoints();
+		}
 		Integer runStart = run != null ? run.getStartTick() : null;
 		if (run != null)
 		{
@@ -421,7 +429,7 @@ public class PostiePetePlugin extends Plugin
 			team = bossKill ? teamFor(kill != null ? kill.getName() : null, firstKnown(runStart, fightTimeStart, firstHit), tick) : null;
 		}
 		postEvent(new LootEvent(common(localPlayer),
-			LootEvent.Source.of(event.getName(), kill, null, completionTime, wave, splits),
+			LootEvent.Source.of(event.getName(), kill, null, completionTime, wave, splits).withPoints(points),
 			toDrops(event.getItems()), gear, team));
 	}
 
@@ -811,10 +819,11 @@ public class PostiePetePlugin extends Plugin
 	{
 		int tick = client.getTickCount();
 
-		// The Chambers of Xeric tells its party when the raid is completed, with the team size
+		// The Chambers of Xeric tells its party when the raid starts, when each level is completed, and when the
+		// raid is completed
 		if (event.getType() == ChatMessageType.FRIENDSCHATNOTIFICATION)
 		{
-			onRaidPartyMessage(Text.removeTags(event.getMessage()));
+			onRaidPartyMessage(Text.removeTags(event.getMessage()), tick);
 			return;
 		}
 
@@ -957,11 +966,25 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * A message to the raid's party, tags removed: the Chambers of Xeric's completion with the team size. Falls
-	 * back to the party size the game keeps if the message shows none.
+	 * A message to the raid's party, tags removed: the Chambers of Xeric's start, a level's completion, or the
+	 * raid's completion with its team size and time. The team size falls back to the party size the game keeps
+	 * if the message shows none.
 	 */
-	private void onRaidPartyMessage(String message)
+	private void onRaidPartyMessage(String message, int tick)
 	{
+		if (message.startsWith(ChambersOfXeric.RAID_START_MESSAGE))
+		{
+			chambersOfXeric.onRaidStarted();
+			return;
+		}
+
+		Matcher matcher = ChambersOfXeric.LEVEL_COMPLETE_PATTERN.matcher(message);
+		if (matcher.find())
+		{
+			chambersOfXeric.onLevelCompleted(matcher.group("level"), parseDuration(matcher.group("time")));
+			return;
+		}
+
 		if (message.startsWith(RaidTeams.COX_COMPLETE_MESSAGE))
 		{
 			Integer size = RaidTeams.coxTeamSize(message);
@@ -971,7 +994,27 @@ public class PostiePetePlugin extends Plugin
 			}
 			log.debug("Chambers of Xeric completed, team size {}", size);
 			raidTeams.onCompleted(RaidTeams.CHAMBERS_OF_XERIC, size);
+
+			// The raid's time is the chest's, and ends the Great Olm's split
+			LootEvent.KillTime raidTime = coxCompletionTime(message);
+			if (raidTime != null)
+			{
+				setKillTime(raidTime, tick, RaidTeams.CHAMBERS_OF_XERIC);
+			}
+			// Read when the raid is completed, like RuneLite's raids plugin does
+			chambersOfXeric.onRaidCompleted(raidTime != null ? raidTime.getDuration() : null,
+				client.getVarbitValue(VarbitID.RAIDS_CLIENT_PARTYSCORE), client.getVarpValue(VarPlayerID.RAIDS_PLAYERSCORE));
 		}
+	}
+
+	/**
+	 * The raid's time and personal best in a Chambers of Xeric completion message, tags removed, or null if it
+	 * shows none.
+	 */
+	static LootEvent.KillTime coxCompletionTime(String message)
+	{
+		Matcher matcher = ChambersOfXeric.COMPLETION_TIME_PATTERN.matcher(message);
+		return matcher.find() ? parseKillTime(matcher) : null;
 	}
 
 	/**
