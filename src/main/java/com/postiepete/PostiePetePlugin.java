@@ -215,7 +215,7 @@ public class PostiePetePlugin extends Plugin
 	private final WaveRun fightCaves = new WaveRun("Wave");
 	private final WaveRun inferno = new WaveRun("Wave");
 
-	private final FracturedArchive fracturedArchive = new FracturedArchive();
+	private final RaidSplits fracturedArchive = new RaidSplits();
 
 	private final TripGear tripGear = new TripGear();
 	private final FightStarts fightStarts = new FightStarts();

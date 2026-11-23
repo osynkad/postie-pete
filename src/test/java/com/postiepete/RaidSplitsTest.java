@@ -6,12 +6,12 @@ import java.util.Arrays;
 import java.util.List;
 import org.junit.Test;
 
-public class FracturedArchiveTest
+public class RaidSplitsTest
 {
 	@Test
 	public void recordsTheSplits()
 	{
-		FracturedArchive archive = new FracturedArchive();
+		RaidSplits archive = new RaidSplits();
 		archive.onRunStarted();
 		archive.onBossCompleted("Archive Guardian", 123.0);
 		archive.onBossCompleted("Bork", 141.0);
@@ -28,7 +28,7 @@ public class FracturedArchiveTest
 	@Test
 	public void runStartClearsAFailedRun()
 	{
-		FracturedArchive archive = new FracturedArchive();
+		RaidSplits archive = new RaidSplits();
 		// A wiped run
 		archive.onBossCompleted("Ezekiel", 100.0);
 
@@ -43,7 +43,7 @@ public class FracturedArchiveTest
 	@Test
 	public void raidIsConsumedByTheFirstLoot()
 	{
-		FracturedArchive archive = new FracturedArchive();
+		RaidSplits archive = new RaidSplits();
 		archive.onBossCompleted("Xarth", 148.2);
 		archive.onRaidCompleted();
 		archive.consumeSplits();
@@ -54,7 +54,7 @@ public class FracturedArchiveTest
 	@Test
 	public void usesTheCurrentRunIfCompletionWasMissed()
 	{
-		FracturedArchive archive = new FracturedArchive();
+		RaidSplits archive = new RaidSplits();
 		archive.onBossCompleted("Xarth", 148.2);
 
 		List<LootEvent.Split> splits = archive.consumeSplits();
