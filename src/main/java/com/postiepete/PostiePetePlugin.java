@@ -151,6 +151,14 @@ public class PostiePetePlugin extends Plugin
 	private static final Pattern TFA_BOSS_COMPLETE_PATTERN = Pattern.compile(
 		"Challenge complete: (?<boss>.+?)\\. Duration: (?<time>[0-9:]+(?:\\.[0-9]+)?)");
 
+	// "Wave 'The Maiden of Sugadinti' (Normal Mode) complete!Duration: 2:05.40Total: 2:05.40", tags removed: a
+	// Theatre of Blood room's completion. Verzik's room is "The Final Challenge".
+	static final Pattern TOB_ROOM_COMPLETE_PATTERN = Pattern.compile(
+		"Wave '(?<room>.+?)' \\([^)]*\\) complete!Duration: (?<time>[0-9:]+(?:\\.[0-9]+)?)");
+
+	// The first Theatre of Blood room. The raid has no start message, so its completion starts the run.
+	static final String TOB_FIRST_ROOM = "The Maiden of Sugadinti";
+
 	private static final String COLOSSEUM = "Fortis Colosseum";
 	private static final String SOL_HEREDIT = "Sol Heredit";
 	private static final String DOOM_OF_MOKHAIOTL = "Doom of Mokhaiotl";
@@ -216,6 +224,7 @@ public class PostiePetePlugin extends Plugin
 	private final WaveRun inferno = new WaveRun("Wave");
 
 	private final RaidSplits fracturedArchive = new RaidSplits();
+	private final RaidSplits theatreOfBlood = new RaidSplits();
 
 	private final TripGear tripGear = new TripGear();
 	private final FightStarts fightStarts = new FightStarts();
@@ -274,6 +283,7 @@ public class PostiePetePlugin extends Plugin
 		fightCaves.reset();
 		inferno.reset();
 		fracturedArchive.reset();
+		theatreOfBlood.reset();
 		killCounts.reset();
 		tripGear.end();
 		fightStarts.reset();
@@ -362,6 +372,11 @@ public class PostiePetePlugin extends Plugin
 		{
 			splits = fracturedArchive.consumeSplits();
 			bossKill = true;
+		}
+		else if (RaidTeams.THEATRE_OF_BLOOD.equals(event.getName()))
+		{
+			// The run so far: the chest is in Verzik's room, so no new run can start before it's opened
+			splits = theatreOfBlood.consumeSplits();
 		}
 		Integer runStart = run != null ? run.getStartTick() : null;
 		if (run != null)
@@ -865,6 +880,19 @@ public class PostiePetePlugin extends Plugin
 		if (matcher.lookingAt())
 		{
 			fracturedArchive.onBossCompleted(matcher.group("boss"), parseDuration(matcher.group("time")));
+			return;
+		}
+
+		// Also checked before KILL_DURATION_PATTERN: a room's duration isn't the raid's time
+		matcher = TOB_ROOM_COMPLETE_PATTERN.matcher(message);
+		if (matcher.lookingAt())
+		{
+			String room = matcher.group("room");
+			if (room.equals(TOB_FIRST_ROOM))
+			{
+				theatreOfBlood.onRunStarted();
+			}
+			theatreOfBlood.onBossCompleted(room, parseDuration(matcher.group("time")));
 			return;
 		}
 

@@ -69,7 +69,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | `personalBest` | number \| null | The personal best in seconds as the game reported it with `duration`: `duration` itself for a new personal best, otherwise the "Personal best:" time in the message. `null` when the game showed none. For a full Fortis Colosseum run it is the personal best from the game's "Colosseum duration:" message. Always `null` for Doom of Mokhaiotl, because the game only reports personal bests per delve level there (work out run personal bests from `duration` instead). |
 | `newPersonalBest` | boolean | `true` when the game's kill time message said "(new personal best)", otherwise `false`. A time that ties the personal best is not a new one: the game shows it as "Personal best:", so `duration` equals `personalBest` but `newPersonalBest` is `false`. Always `false` when `personalBest` is `null`. |
 | `wave` | number \| null | How far the run got, for wave activities: the **Fortis Colosseum** wave when the loot was claimed (1–12), the **Doom of Mokhaiotl** delve level (can go past 8), and the **Fight Caves** / **Inferno** wave at the kill (63 / 69 for a full run). Doom's comes from the game's loot data, so it is always known. The others come from the last wave message the plugin saw, which can be later than the last split (a wave whose time couldn't be read has no split), and are `null` if no wave message was seen. `null` for all other loot. Use this rather than counting splits. |
-| `splits` | array \| null | Fortis Colosseum, Doom of Mokhaiotl, Fight Caves, Inferno and Fractured Archive only: the run's waves, delve levels or bosses with their times. See [Splits](#splits). `null` for all other loot, and when none were seen. |
+| `splits` | array \| null | Fortis Colosseum, Doom of Mokhaiotl, Fight Caves, Inferno, Theatre of Blood and Fractured Archive only: the run's waves, delve levels, rooms or bosses with their times. See [Splits](#splits). `null` for all other loot, and when none were seen. |
 
 For Fortis Colosseum and Doom of Mokhaiotl, `duration` is only set for a full run: waves 1–12 for the Colosseum, delve levels 1–8 for Doom. The Colosseum's is the game's "Colosseum duration:" time, or if that message was missed, the run time the game keeps (then without a personal best). A Doom run that continues past level 8 still gets the time at the end of level 8. Loot claimed earlier has `duration: null` but is otherwise a normal `loot` event.
 
@@ -77,13 +77,13 @@ A few kills come with no loot at the kill: the **Inferno** and the **Fight Caves
 
 #### Splits
 
-The parts of a run in the order played, as a list of `{ "name": string, "duration": number }`. Sent with the Fortis Colosseum, Doom of Mokhaiotl and Fractured Archive chests, whenever they are claimed, and with the `"TzTok-Jad"` (Fight Caves) and `"TzKal-Zuk"` (Inferno) kills. `null` for all other loot, and also when none were seen (e.g. the plugin was turned on mid-run): use `source.name` to tell the two apart.
+The parts of a run in the order played, as a list of `{ "name": string, "duration": number }`. Sent with the Fortis Colosseum, Doom of Mokhaiotl, Theatre of Blood and Fractured Archive chests, whenever they are claimed, and with the `"TzTok-Jad"` (Fight Caves) and `"TzKal-Zuk"` (Inferno) kills. `null` for all other loot, and also when none were seen (e.g. the plugin was turned on mid-run): use `source.name` to tell the two apart.
 
 Parts the plugin missed are left out, so the list can have gaps. Don't count splits to find how far a run got: use `wave`.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `name` | string | The part of the run. Waves are `"Wave <n>"` (e.g. `"Wave 3"`) and Doom delve levels `"Level <n>"` (e.g. `"Level 22"`; levels past 8 are printed as e.g. "8+ (22)" and the level in brackets is used), so the number can be parsed from the name. Bosses are named as the game names them (e.g. `"Bork"`). |
+| `name` | string | The part of the run. Waves are `"Wave <n>"` (e.g. `"Wave 3"`) and Doom delve levels `"Level <n>"` (e.g. `"Level 22"`; levels past 8 are printed as e.g. "8+ (22)" and the level in brackets is used), so the number can be parsed from the name. Bosses and Theatre of Blood rooms are named as the game names them (e.g. `"Bork"`, `"The Pestilent Bloat"`). |
 | `duration` | number | The part's time in seconds. What it covers depends on the content, see below. |
 
 What `duration` covers, and whether the splits add up to `source.duration`:
@@ -93,6 +93,7 @@ What `duration` covers, and whether the splits add up to `source.duration`:
 | Fortis Colosseum | `"Wave 1"` – `"Wave 12"` | The time the game printed for the wave. Wave 12's message shows the whole run's time instead, so wave 12 is that time less waves 1–11, and is left out if any of them is missing. | Yes, for a full run with every wave seen, since wave 12 is worked out from the run time. |
 | Doom of Mokhaiotl | `"Level 1"`, `"Level 2"` … | The time the game printed for the delve level. | No: `source.duration` stops at the end of level 8, while splits go on to the deepest level reached. |
 | Fight Caves, Inferno | `"Wave 1"` – `"Wave 63"` / `"Wave 69"` | Counted in game ticks (0.6 seconds each) from the wave's start message to the next one's, so the time between waves is included. The last wave ends at the kill count message. | Close to it, when every wave was seen. |
+| Theatre of Blood | the room: `"The Maiden of Sugadinti"`, `"The Pestilent Bloat"`, `"The Nylocas"`, `"Sotetseg"`, `"Xarpus"`, `"The Final Challenge"` (Verzik) | The room's time as the game printed it, in every mode. | No: the time between rooms isn't included. |
 | Fractured Archive | the boss, e.g. `"Archive Guardian"`, `"Bork"` | The boss's time as the game printed it. The 2nd to 4th boss are the path picked. | No: the time between bosses isn't included. |
 
 #### Player items

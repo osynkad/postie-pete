@@ -82,4 +82,32 @@ public class WavePatternTest
 		assertFalse(PostiePetePlugin.TZHAAR_WAVE_PATTERN.matcher(
 			Text.removeTags("Wave 2 completed! Wave duration: <col=ef1020>1:09.60</col>")).matches());
 	}
+
+	@Test
+	public void theatreOfBloodRoomWithItsTime()
+	{
+		Matcher matcher = PostiePetePlugin.TOB_ROOM_COMPLETE_PATTERN.matcher(Text.removeTags(
+			"Wave 'The Maiden of Sugadinti' (Normal Mode) complete!<br>Duration: <col=ff0000>2:05.40</col><br>"
+				+ "Total: <col=ff0000>2:05.40</col>"));
+		assertTrue(matcher.lookingAt());
+		assertEquals("The Maiden of Sugadinti", matcher.group("room"));
+		assertEquals("2:05.40", matcher.group("time"));
+	}
+
+	@Test
+	public void theatreOfBloodVerzikRoomInHardMode()
+	{
+		Matcher matcher = PostiePetePlugin.TOB_ROOM_COMPLETE_PATTERN.matcher(
+			"Wave 'The Final Challenge' (Hard Mode) complete!Duration: 4:12Total: 24:30");
+		assertTrue(matcher.lookingAt());
+		assertEquals("The Final Challenge", matcher.group("room"));
+		assertEquals("4:12", matcher.group("time"));
+	}
+
+	@Test
+	public void colosseumWaveIsNotATheatreOfBloodRoom()
+	{
+		assertFalse(PostiePetePlugin.TOB_ROOM_COMPLETE_PATTERN.matcher(
+			"Wave 2 completed! Wave duration: 1:09.60").lookingAt());
+	}
 }
