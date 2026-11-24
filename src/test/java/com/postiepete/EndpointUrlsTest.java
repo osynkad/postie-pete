@@ -38,8 +38,37 @@ public class EndpointUrlsTest
 			urls("https://example.com/a,not a url,https://example.com/b, https://example.com/a"));
 	}
 
+	@Test
+	public void syncUrlsReplaceTheLastPathSegment()
+	{
+		assertEquals(Arrays.asList("http://localhost:3000/sync/cas", "https://example.com/osrs/sync/cas"),
+			syncUrls("http://localhost:3000/events, https://example.com/osrs/events", "sync/cas"));
+		assertEquals(Collections.singletonList("https://example.com/sync/clogs"),
+			syncUrls("https://example.com", "sync/clogs"));
+	}
+
+	@Test
+	public void syncUrlsKeepTheQueryString()
+	{
+		assertEquals(Collections.singletonList("https://example.com/sync/cas?key=abc"),
+			syncUrls("https://example.com/events?key=abc", "sync/cas"));
+	}
+
+	@Test
+	public void syncUrlsSkipDuplicates()
+	{
+		assertEquals(Collections.singletonList("https://example.com/sync/cas"),
+			syncUrls("https://example.com/events, https://example.com/other", "sync/cas"));
+		assertEquals(Collections.emptyList(), syncUrls("", "sync/cas"));
+	}
+
 	private static List<String> urls(String setting)
 	{
 		return PostiePetePlugin.endpointUrls(setting).stream().map(HttpUrl::toString).collect(Collectors.toList());
+	}
+
+	private static List<String> syncUrls(String setting, String path)
+	{
+		return PostiePetePlugin.syncUrls(setting, path).stream().map(HttpUrl::toString).collect(Collectors.toList());
 	}
 }

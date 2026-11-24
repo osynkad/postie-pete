@@ -177,7 +177,7 @@ class CombatAchievementReader
 			return;
 		}
 
-		if (!config.sendCombatAchievementSnapshot() || PostiePetePlugin.endpointUrls(config.endpointUrl()).isEmpty())
+		if (PostiePetePlugin.endpointUrls(config.endpointUrl()).isEmpty())
 		{
 			return;
 		}

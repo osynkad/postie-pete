@@ -79,6 +79,12 @@ public class PostiePetePlugin extends Plugin
 {
 	private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
+	/**
+	 * Snapshots are state, not events, so they go to their own paths next to each endpoint URL.
+	 */
+	static final String SYNC_CLOGS_PATH = "sync/clogs";
+	static final String SYNC_CAS_PATH = "sync/cas";
+
 	// Matches boss kill duration messages, e.g. "Fight duration: <col=ff0000>1:23.40</col>. Personal best: 1:20.00"
 	// or "Fight duration: <col=ff0000>1:19.80</col> (new personal best)". Same formats as RuneLite's chat commands plugin.
 	// The personal best time can be coloured too.
@@ -1229,12 +1235,12 @@ public class PostiePetePlugin extends Plugin
 	private void onCollectionLogRead(List<CollectionLogSnapshotEvent.Item> items, int obtainedSlots)
 	{
 		Player localPlayer = client.getLocalPlayer();
-		if (localPlayer == null || !config.sendCollectionLogSnapshot())
+		if (localPlayer == null)
 		{
 			return;
 		}
 
-		postEvent(new CollectionLogSnapshotEvent(common(localPlayer), items, obtainedSlots));
+		postSync(new CollectionLogSnapshotEvent(common(localPlayer), items, obtainedSlots), SYNC_CLOGS_PATH);
 	}
 
 	/**
@@ -1244,12 +1250,13 @@ public class PostiePetePlugin extends Plugin
 		List<CombatAchievementSnapshotEvent.TierProgress> tiers)
 	{
 		Player localPlayer = client.getLocalPlayer();
-		if (localPlayer == null || !config.sendCombatAchievementSnapshot())
+		if (localPlayer == null)
 		{
 			return;
 		}
 
-		postEvent(new CombatAchievementSnapshotEvent(common(localPlayer), completedTaskIds, points, tier, tiers));
+		postSync(new CombatAchievementSnapshotEvent(common(localPlayer), completedTaskIds, points, tier, tiers),
+			SYNC_CAS_PATH);
 	}
 
 	/**
@@ -1434,6 +1441,42 @@ public class PostiePetePlugin extends Plugin
 			urls.add(url);
 		}
 		return new ArrayList<>(urls);
+	}
+
+	/**
+	 * Where snapshots go: the path resolved against each endpoint URL, so it replaces the URL's last path segment
+	 * (".../events" becomes ".../sync/cas"). The endpoint URL's query string is kept, e.g. for an API key.
+	 */
+	static List<HttpUrl> syncUrls(String setting, String path)
+	{
+		Set<HttpUrl> urls = new LinkedHashSet<>();
+		for (HttpUrl endpoint : endpointUrls(setting))
+		{
+			HttpUrl resolved = endpoint.resolve(path);
+			if (resolved != null)
+			{
+				urls.add(resolved.newBuilder().encodedQuery(endpoint.encodedQuery()).build());
+			}
+		}
+		return new ArrayList<>(urls);
+	}
+
+	/**
+	 * Sends a snapshot to its sync path next to each endpoint URL, instead of to the endpoint URLs themselves.
+	 */
+	private void postSync(PostieEvent snapshot, String path)
+	{
+		List<HttpUrl> urls = syncUrls(config.endpointUrl(), path);
+		if (urls.isEmpty())
+		{
+			return;
+		}
+
+		String json = gson.toJson(snapshot);
+		for (HttpUrl url : urls)
+		{
+			post(url, json);
+		}
 	}
 
 	private void postEvent(PostieEvent event)
