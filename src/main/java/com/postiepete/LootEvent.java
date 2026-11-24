@@ -178,7 +178,7 @@ class LootEvent extends PostieEvent
 		String name;
 
 		/**
-		 * The part's duration in seconds, e.g. 141.0. What it covers depends on the content: see the README.
+		 * The part's duration in seconds, e.g. 141.0. What it covers depends on the content: see DEVELOPMENT.md.
 		 */
 		double duration;
 	}
