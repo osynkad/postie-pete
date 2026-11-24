@@ -182,6 +182,14 @@ class CollectionLogReader
 			return;
 		}
 
+		// Without it the snapshot can't be matched to an account: the name can change
+		if (client.getAccountHash() == -1)
+		{
+			log.debug("No account hash, collection log snapshot not sent");
+			reading = false;
+			return;
+		}
+
 		if (searchTick == -1)
 		{
 			// The interface has finished loading: toggle the search on and off to list every item.

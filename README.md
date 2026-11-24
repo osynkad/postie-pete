@@ -309,7 +309,7 @@ Field order in the JSON is not guaranteed.
 
 ## Sync
 
-Snapshots of everything in your collection log and combat achievements, so what you got before installing the plugin can be backfilled. A snapshot is sent every time the player opens the matching interface in game, so expect the same one many times. It is the player's current state, not something that happened: store the latest one per `accountHash`, replacing the previous one, rather than appending it to your events.
+Snapshots of everything in your collection log and combat achievements, so what you got before installing the plugin can be backfilled. A snapshot is sent every time the player opens the matching interface in game, so expect the same one many times. It is the player's current state, not something that happened: store the latest one per `accountHash`, replacing the previous one, rather than appending it to your events. `accountHash` is never `null` in a snapshot: without it a snapshot can't be matched to an account, so none is sent.
 
 Snapshots aren't sent to the endpoint URLs themselves but to a path next to each one: the path replaces the last part of the URL, and any query string is kept.
 

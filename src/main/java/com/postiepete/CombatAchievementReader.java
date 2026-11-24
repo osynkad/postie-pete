@@ -210,6 +210,13 @@ class CombatAchievementReader
 			return;
 		}
 
+		// Without it the snapshot can't be matched to an account: the name can change
+		if (client.getAccountHash() == -1)
+		{
+			log.debug("No account hash, combat achievement snapshot not sent");
+			return;
+		}
+
 		int points = client.getVarbitValue(VarbitID.CA_POINTS);
 		Set<Integer> completed = new TreeSet<>();
 		List<CombatAchievementSnapshotEvent.TierProgress> tiers = new ArrayList<>(TIER_ENUMS.length);
