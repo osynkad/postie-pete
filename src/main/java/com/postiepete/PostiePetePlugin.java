@@ -1244,7 +1244,7 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * Every completed combat task was read after login or opening the combat achievements interface.
+	 * Every completed combat task was read after the player opened the combat achievements interface.
 	 */
 	private void onCombatAchievementsRead(List<Integer> completedTaskIds, int points, String tier,
 		List<CombatAchievementSnapshotEvent.TierProgress> tiers)

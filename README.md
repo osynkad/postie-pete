@@ -309,7 +309,7 @@ Field order in the JSON is not guaranteed.
 
 ## Sync
 
-Snapshots of everything in your collection log and combat achievements, so what you got before installing the plugin can be backfilled. A snapshot is the player's current state, not something that happened: store the latest one per `accountHash`, replacing the previous one, rather than appending it to your events.
+Snapshots of everything in your collection log and combat achievements, so what you got before installing the plugin can be backfilled. A snapshot is sent every time the player opens the matching interface in game, so expect the same one many times. It is the player's current state, not something that happened: store the latest one per `accountHash`, replacing the previous one, rather than appending it to your events.
 
 Snapshots aren't sent to the endpoint URLs themselves but to a path next to each one: the path replaces the last part of the URL, and any query string is kept.
 
@@ -322,7 +322,7 @@ An endpoint URL of `https://example.com/osrs/events?key=abc` sends to `https://e
 
 ### `collection_log_snapshot`
 
-Every item in the collection log. Sent when you open the collection log in game, at most once per opening, and only if the log changed since the last snapshot sent in this session. The plugin briefly opens and closes the log's search to list every item (the same approach as the [Valiance clan plugin](https://github.com/Sicryption/ValianceClanPlugin)). Opening the log is enough: you don't need to click through the pages.
+Every item in the collection log. Sent every time you open the collection log in game, and only then, whether or not anything changed. The plugin briefly opens and closes the log's search to list every item (the same approach as the [Valiance clan plugin](https://github.com/Sicryption/ValianceClanPlugin)). Opening the log is enough: you don't need to click through the pages.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -345,7 +345,7 @@ Every item in the collection log. Sent when you open the collection log in game,
 
 ### `combat_achievement_snapshot`
 
-Every completed combat task with your points and tier (the example below uses made-up totals and thresholds). Sent a few seconds after you log in and again when you open any combat achievements interface, only if your completed tasks changed since the last snapshot sent in this session. It isn't sent while you have 0 points. Everything is read from values the game sends at login, so no interface is opened or clicked. Task completion is read the same way as the [Valiance clan plugin](https://github.com/Sicryption/ValianceClanPlugin).
+Every completed combat task with your points and tier (the example below uses made-up totals and thresholds). Sent every time you open the combat achievements interface in game, and only then, whether or not anything changed. Switching between its tabs doesn't send it again. Everything is read from values the game already has, so nothing is clicked. Task completion is read the same way as the [Valiance clan plugin](https://github.com/Sicryption/ValianceClanPlugin).
 
 | Field | Type | Description |
 | --- | --- | --- |

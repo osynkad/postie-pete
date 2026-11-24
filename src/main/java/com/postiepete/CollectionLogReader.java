@@ -39,7 +39,9 @@ import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.api.MenuAction;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.WidgetClosed;
@@ -84,10 +86,19 @@ class CollectionLogReader
 	private final PostiePeteConfig config;
 
 	private BiConsumer<List<CollectionLogSnapshotEvent.Item>, Integer> onRead;
-	private boolean open;
+
+	/**
+	 * The collection log is on screen. A load while it already is (e.g. caused by the search toggle) isn't a new
+	 * opening, so it doesn't start another read.
+	 */
+	private boolean visible;
+
+	/**
+	 * A read was started by opening the log and hasn't finished or given up yet.
+	 */
+	private boolean reading;
 	private int searchTick = -1;
 	private Map<Integer, Integer> items = new HashMap<>();
-	private Map<Integer, Integer> lastSent;
 
 	@Inject
 	CollectionLogReader(Client client, PostiePeteConfig config)
@@ -106,19 +117,30 @@ class CollectionLogReader
 
 	void reset()
 	{
-		open = false;
+		visible = false;
+		reading = false;
 		searchTick = -1;
 		items = new HashMap<>();
-		lastSent = null;
 	}
 
 	@Subscribe
 	public void onWidgetLoaded(WidgetLoaded event)
 	{
-		if (event.getGroupId() == InterfaceID.COLLECTION)
+		if (event.getGroupId() == InterfaceID.COLLECTION && !visible)
 		{
-			open = true;
+			visible = true;
+			reading = true;
 			searchTick = -1;
+		}
+	}
+
+	@Subscribe
+	public void onGameStateChanged(GameStateChanged event)
+	{
+		// Interfaces are gone after logging out or hopping, even if no close event came for the log
+		if (event.getGameState() == GameState.LOGIN_SCREEN || event.getGameState() == GameState.HOPPING)
+		{
+			reset();
 		}
 	}
 
@@ -127,7 +149,8 @@ class CollectionLogReader
 	{
 		if (event.getGroupId() == InterfaceID.COLLECTION)
 		{
-			open = false;
+			visible = false;
+			reading = false;
 			searchTick = -1;
 		}
 	}
@@ -147,7 +170,7 @@ class CollectionLogReader
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
-		if (!open)
+		if (!reading)
 		{
 			return;
 		}
@@ -155,7 +178,7 @@ class CollectionLogReader
 		// Leave the interface alone unless the snapshot will actually be sent.
 		if (PostiePetePlugin.endpointUrls(config.endpointUrl()).isEmpty())
 		{
-			open = false;
+			reading = false;
 			return;
 		}
 
@@ -177,19 +200,13 @@ class CollectionLogReader
 			{
 				log.debug("Collection log read gave up with {} of {} slots", slots, expected);
 				chat("Postie Pete couldn't read your whole collection log. Close it and open it again to retry.");
-				open = false;
+				reading = false;
 			}
 			return;
 		}
 
-		// Read once per opening. Sending again in the same session is pointless if nothing changed.
-		open = false;
-		if (items.equals(lastSent))
-		{
-			return;
-		}
-		lastSent = items;
-
+		// Sent on every opening, changed or not, so a request that failed is simply retried by opening the log again.
+		reading = false;
 		List<CollectionLogSnapshotEvent.Item> list = new ArrayList<>(items.size());
 		items.forEach((id, quantity) -> list.add(new CollectionLogSnapshotEvent.Item(id, quantity)));
 		if (onRead != null)

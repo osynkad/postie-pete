@@ -40,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.EnumComposition;
 import net.runelite.api.GameState;
+import net.runelite.api.WidgetNode;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.WidgetLoaded;
@@ -108,11 +109,6 @@ class CombatAchievementReader
 	);
 
 	/**
-	 * Varps arrive during login; wait a few ticks so they are all in before reading.
-	 */
-	private static final int LOGIN_DELAY_TICKS = 5;
-
-	/**
 	 * Called on the client thread with what was read.
 	 */
 	interface OnRead
@@ -125,8 +121,17 @@ class CombatAchievementReader
 	private final PostiePeteConfig config;
 
 	private OnRead onRead;
-	private int ticksUntilRead = -1;
-	private Set<Integer> lastSent;
+
+	/**
+	 * A combat achievements interface is on screen. Switching between its tabs loads another of them, which isn't a
+	 * new opening, so it doesn't send again.
+	 */
+	private boolean visible;
+
+	/**
+	 * Read on the next tick: the interfaces were just opened.
+	 */
+	private boolean pendingRead;
 
 	@Inject
 	CombatAchievementReader(Client client, PostiePeteConfig config)
@@ -142,20 +147,16 @@ class CombatAchievementReader
 
 	void reset()
 	{
-		ticksUntilRead = -1;
-		lastSent = null;
+		visible = false;
+		pendingRead = false;
 	}
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
 	{
-		if (event.getGameState() == GameState.LOGGED_IN)
+		// Interfaces are gone after logging out or hopping
+		if (event.getGameState() == GameState.LOGIN_SCREEN || event.getGameState() == GameState.HOPPING)
 		{
-			ticksUntilRead = LOGIN_DELAY_TICKS;
-		}
-		else if (event.getGameState() == GameState.LOGIN_SCREEN)
-		{
-			// Possibly a different account next: forget what was sent.
 			reset();
 		}
 	}
@@ -163,32 +164,53 @@ class CombatAchievementReader
 	@Subscribe
 	public void onWidgetLoaded(WidgetLoaded event)
 	{
-		if (CA_INTERFACES.contains(event.getGroupId()))
+		if (CA_INTERFACES.contains(event.getGroupId()) && !visible)
 		{
-			ticksUntilRead = 0;
+			visible = true;
+			pendingRead = true;
 		}
 	}
 
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
-		if (ticksUntilRead < 0 || ticksUntilRead-- > 0)
+		if (pendingRead)
 		{
-			return;
+			pendingRead = false;
+			read();
 		}
 
+		// Only looked up while one is open, so the next opening can be told apart from a tab switch
+		if (visible && !anyInterfaceOpen())
+		{
+			visible = false;
+		}
+	}
+
+	private boolean anyInterfaceOpen()
+	{
+		for (WidgetNode node : client.getComponentTable())
+		{
+			if (CA_INTERFACES.contains(node.getId()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Sent on every opening, changed or not, so a request that failed is simply retried by opening the interface
+	 * again. Read while the interface is open, the values the game shows in it are all in.
+	 */
+	private void read()
+	{
 		if (PostiePetePlugin.endpointUrls(config.endpointUrl()).isEmpty())
 		{
 			return;
 		}
 
 		int points = client.getVarbitValue(VarbitID.CA_POINTS);
-		if (points <= 0)
-		{
-			// Nothing to backfill, or the values haven't arrived yet. Never send an empty log over a real one.
-			return;
-		}
-
 		Set<Integer> completed = new TreeSet<>();
 		List<CombatAchievementSnapshotEvent.TierProgress> tiers = new ArrayList<>(TIER_ENUMS.length);
 		int[] thresholds = new int[TIER_ENUMS.length];
@@ -210,12 +232,6 @@ class CombatAchievementReader
 			tiers.add(new CombatAchievementSnapshotEvent.TierProgress(TIER_NAMES[i], done, tasks.size(),
 				thresholds[i] > 0 ? thresholds[i] : null));
 		}
-
-		if (completed.equals(lastSent))
-		{
-			return;
-		}
-		lastSent = completed;
 
 		if (onRead != null)
 		{
