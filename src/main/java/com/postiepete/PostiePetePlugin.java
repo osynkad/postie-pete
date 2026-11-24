@@ -1,6 +1,7 @@
 package com.postiepete;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 import com.google.inject.Provides;
 import java.io.IOException;
 import java.time.Instant;
@@ -15,6 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -77,7 +79,20 @@ import okhttp3.Response;
 )
 public class PostiePetePlugin extends Plugin
 {
+	/**
+	 * Sent with every event as pluginVersion. Must match version in runelite-plugin.properties.
+	 */
+	static final String VERSION = "0.4.0";
+
 	private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+
+	/**
+	 * The error an endpoint answers with when it wants a newer version of the plugin.
+	 */
+	static final String OUTDATED_PLUGIN_ERROR = "outdated_plugin";
+
+	// Responses are only read this far: the outdated body is tiny
+	private static final long MAX_RESPONSE_BODY_BYTES = 4096;
 
 	/**
 	 * Snapshots are state, not events, so they go to their own paths next to each endpoint URL.
@@ -270,6 +285,9 @@ public class PostiePetePlugin extends Plugin
 	// Whether the Loot Tracker has been checked since logging in, so the warning shows once per login, not per hop
 	private boolean lootTrackerChecked;
 
+	// Endpoint hosts already warned about this plugin being outdated. Added to from OkHttp threads.
+	private final Set<String> outdatedHostsWarned = ConcurrentHashMap.newKeySet();
+
 	@Override
 	protected void startUp() throws Exception
 	{
@@ -328,6 +346,7 @@ public class PostiePetePlugin extends Plugin
 		collectionLogReader.reset();
 		eventBus.unregister(combatAchievementReader);
 		combatAchievementReader.reset();
+		outdatedHostsWarned.clear();
 		log.debug("Postie Pete stopped!");
 	}
 
@@ -1518,9 +1537,66 @@ public class PostiePetePlugin extends Plugin
 					{
 						log.debug("Event POST to {} returned HTTP {}", url, response.code());
 					}
+
+					String minVersion = outdatedPluginMinVersion(gson, response.peekBody(MAX_RESPONSE_BODY_BYTES).string());
+					if (minVersion != null)
+					{
+						log.debug("{} wants plugin version {}, this is {}", url, minVersion, VERSION);
+						warnOutdated(url.host());
+					}
+				}
+				catch (IOException e)
+				{
+					log.debug("Failed to read the response from {}", url, e);
 				}
 			}
 		});
+	}
+
+	/**
+	 * The plugin version an endpoint's response asks for, if it says this one is outdated: "?" when it doesn't
+	 * say which. Null for any other response, including bodies that aren't JSON.
+	 */
+	static String outdatedPluginMinVersion(Gson gson, String body)
+	{
+		OutdatedPluginResponse response;
+		try
+		{
+			response = gson.fromJson(body, OutdatedPluginResponse.class);
+		}
+		catch (JsonParseException e)
+		{
+			return null;
+		}
+		if (response == null || !OUTDATED_PLUGIN_ERROR.equals(response.error))
+		{
+			return null;
+		}
+		return response.minPluginVersion != null ? response.minPluginVersion : "?";
+	}
+
+	/**
+	 * Tells the player once per endpoint host per session. The wording is the plugin's own, never the server's,
+	 * since endpoints are set by the player and could be anyone's.
+	 */
+	private void warnOutdated(String host)
+	{
+		if (!outdatedHostsWarned.add(host))
+		{
+			return;
+		}
+		clientThread.invokeLater(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "",
+			"Postie Pete is out of date for " + host + ". Restart RuneLite or update it from Plugin Hub.", null));
+	}
+
+	/**
+	 * The body an endpoint answers with when it wants a newer plugin, e.g.
+	 * {"error":"outdated_plugin","minPluginVersion":"0.4.0"}.
+	 */
+	static class OutdatedPluginResponse
+	{
+		String error;
+		String minPluginVersion;
 	}
 
 	@Provides

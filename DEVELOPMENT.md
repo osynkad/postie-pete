@@ -17,6 +17,18 @@ Content-Type: application/json
 
 Any `2xx` response counts as success. Failed requests are not retried.
 
+### Outdated plugin
+
+Each event carries the [`pluginVersion`](#common-fields) that sent it. If your API needs a newer payload than a player's plugin sends, answer with this body:
+
+```json
+{ "error": "outdated_plugin", "minPluginVersion": "0.4.0" }
+```
+
+Any status code works. Pick the one that says what you did with the event: a `2xx` if you stored it anyway (to upgrade later, say), or a `4xx` if you dropped it. The plugin then tells the player once per session, in game chat, that it is out of date for your API's host and to restart RuneLite, which updates Plugin Hub plugins. It shows its own message, never text from your response. It keeps sending events either way.
+
+Plugins older than 0.4.0 don't send `pluginVersion` and ignore this response.
+
 Snapshots of your whole collection log and combat achievements aren't events, so they go to their own paths next to each endpoint URL instead: see [Sync](#sync).
 
 ## Settings
@@ -53,6 +65,7 @@ New event types and new fields may be added in later versions. Ignore event type
 | `timestamp` | string | When the event happened, ISO 8601 in UTC to the second, e.g. `"2026-11-12T20:35:00Z"`. |
 | `rsn` | string | The player's current display name. Changes when the player changes name. |
 | `accountHash` | string | Stable account identifier that survives name changes. Use this, not `rsn`, to identify a player. A string because it is a 64-bit number. |
+| `pluginVersion` | string | The Postie Pete release that sent the event, e.g. `"0.4.0"`. Missing from events sent by versions before 0.4.0. See [Outdated plugin](#outdated-plugin). |
 
 ### `loot`
 
@@ -158,6 +171,7 @@ A raid chest whose completion wasn't seen (e.g. the plugin was turned on mid-rai
   "timestamp": "2026-11-17T14:32:10Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
+  "pluginVersion": "0.4.0",
   "source": {
     "name": "Mad Angel",
     "lootName": null,
@@ -201,6 +215,7 @@ A Fortis Colosseum chest claimed after wave 3:
   "timestamp": "2026-11-21T19:42:08Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
+  "pluginVersion": "0.4.0",
   "source": {
     "name": "Fortis Colosseum",
     "lootName": null,
@@ -239,6 +254,7 @@ A Fractured Archive chest:
   "timestamp": "2026-11-17T19:05:44Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
+  "pluginVersion": "0.4.0",
   "source": {
     "name": "Fractured Archive",
     "lootName": null,
@@ -284,6 +300,7 @@ A Fractured Archive chest:
   "timestamp": "2026-11-12T20:35:00Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
+  "pluginVersion": "0.4.0",
   "itemName": "Vorkath's head",
   "itemId": 21907
 }
@@ -303,6 +320,7 @@ A Fractured Archive chest:
   "timestamp": "2026-11-12T20:35:00Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
+  "pluginVersion": "0.4.0",
   "tier": "hard",
   "task": "Why Are You Running?",
   "taskId": 402
@@ -339,6 +357,7 @@ Every item in the collection log. Sent every time you open the collection log in
   "timestamp": "2026-11-12T20:35:00Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
+  "pluginVersion": "0.4.0",
   "items": [
     { "itemId": 4151, "quantity": 3 },
     { "itemId": 13262, "quantity": 1 }
@@ -365,6 +384,7 @@ Every completed combat task with your points and tier (the example below uses ma
   "timestamp": "2026-11-12T20:35:00Z",
   "rsn": "ExamplePlayer",
   "accountHash": "-3412345678901234567",
+  "pluginVersion": "0.4.0",
   "completedTaskIds": [0, 1, 4, 17, 402],
   "completedTasks": 5,
   "points": 7,

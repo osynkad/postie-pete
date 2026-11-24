@@ -28,8 +28,14 @@ abstract class PostieEvent
 	 */
 	final String accountHash;
 
+	/**
+	 * The plugin release that sent the event, so a receiver can tell which payload format it is in.
+	 */
+	final String pluginVersion;
+
 	PostieEvent(String eventType, Common common)
 	{
+		this.pluginVersion = PostiePetePlugin.VERSION;
 		this.eventType = eventType;
 		this.timestamp = common.timestamp;
 		this.rsn = common.rsn;

@@ -22,7 +22,7 @@ public class PostieEventTest
 	private static final PostieEvent.Common COMMON = new PostieEvent.Common(
 		"2026-11-12T20:35:00Z", "ExamplePlayer", "-3412345678901234567");
 
-	private static final Set<String> COMMON_FIELDS = set("eventType", "timestamp", "rsn", "accountHash");
+	private static final Set<String> COMMON_FIELDS = set("eventType", "timestamp", "rsn", "accountHash", "pluginVersion");
 
 	private static final List<String> SOURCE_FIELDS = Arrays.asList(
 		"name", "lootName", "npcId", "killCount", "duration", "personalBest", "newPersonalBest", "wave", "splits",
