@@ -56,6 +56,10 @@
 - `build.gradle` must target Java 11** and match the structure of the example-plugin template.
 - Retain a permissive license, such as BSD-2.
 
+## Versioning
+
+- The plugin version is set in two places that must always match: `version` in `runelite-plugin.properties` and `static final String VERSION` in `PostiePetePlugin.java` (sent as `pluginVersion` with every event). Bump both together for every release; `PluginVersionTest` fails if they differ.
+
 ## Resources & Assets
 
 - Optimize icon PNGs. Java loads images at full resolution in memory (`width × height × 4` bytes), so a seemingly small file can use significant memory.
@@ -74,7 +78,7 @@ You cannot verify plugin behavior yourself. Even if you have screen-capture or c
 After completing a task, do not declare it done. Instead:
 
 1. Offer to launch RuneLite for the user by running `./gradlew run` from the plugin's root directory.
-2. Instruct the user to follow the "Using Jagex Accounts" instructions found at https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts to login to the development client.
+2. Instruct the user to follow the "Using Jagex Accounts" instructions found at <https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts> to login to the development client.
 3. Tell the user *what to test* — the specific behavior you changed, the golden path, and any edge cases worth exercising.
 4. Wait for the user to confirm the feature works in-game before considering the task complete. A clean JVM start is not a passing test.
 
