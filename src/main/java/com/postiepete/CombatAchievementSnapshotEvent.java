@@ -66,5 +66,10 @@ class CombatAchievementSnapshotEvent extends PostieEvent
 		 * Points needed to reach this tier, or null if the game didn't report it.
 		 */
 		Integer pointsThreshold;
+
+		/**
+		 * Points all tasks in this tier are worth together.
+		 */
+		int maxPoints;
 	}
 }

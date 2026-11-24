@@ -234,8 +234,8 @@ public class PostieEventTest
 	{
 		JsonObject json = toJson(new CombatAchievementSnapshotEvent(COMMON, Arrays.asList(3, 17, 402), 9, "easy",
 			Arrays.asList(
-				new CombatAchievementSnapshotEvent.TierProgress("easy", 2, 33, 33),
-				new CombatAchievementSnapshotEvent.TierProgress("medium", 1, 41, null))));
+				new CombatAchievementSnapshotEvent.TierProgress("easy", 2, 33, 33, 33),
+				new CombatAchievementSnapshotEvent.TierProgress("medium", 1, 41, null, 82))));
 
 		assertEquals(with(COMMON_FIELDS, "completedTaskIds", "completedTasks", "points", "tier", "tiers"), json.keySet());
 		assertEquals("combat_achievement_snapshot", json.get("eventType").getAsString());
@@ -244,8 +244,9 @@ public class PostieEventTest
 		assertEquals(9, json.get("points").getAsInt());
 		assertEquals("easy", json.get("tier").getAsString());
 		JsonObject easy = json.getAsJsonArray("tiers").get(0).getAsJsonObject();
-		assertEquals(set("tier", "completed", "total", "pointsThreshold"), easy.keySet());
+		assertEquals(set("tier", "completed", "total", "pointsThreshold", "maxPoints"), easy.keySet());
 		assertEquals(33, easy.get("pointsThreshold").getAsInt());
+		assertEquals(82, json.getAsJsonArray("tiers").get(1).getAsJsonObject().get("maxPoints").getAsInt());
 		assertEquals(true, json.getAsJsonArray("tiers").get(1).getAsJsonObject().get("pointsThreshold").isJsonNull());
 	}
 

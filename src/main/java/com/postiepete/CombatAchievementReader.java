@@ -59,6 +59,11 @@ class CombatAchievementReader
 	 */
 	private static final int[] TIER_ENUMS = {3981, 3982, 3983, 3984, 3985, 3986};
 
+	/**
+	 * What one task in each tier is worth, easy first. A fixed game rule, not in any value the game sends.
+	 */
+	static final int[] POINTS_PER_TASK = {1, 2, 3, 4, 5, 6};
+
 	private static final int[] TIER_THRESHOLD_VARBITS = {
 		VarbitID.CA_THRESHOLD_EASY,
 		VarbitID.CA_THRESHOLD_MEDIUM,
@@ -237,7 +242,7 @@ class CombatAchievementReader
 
 			thresholds[i] = client.getVarbitValue(TIER_THRESHOLD_VARBITS[i]);
 			tiers.add(new CombatAchievementSnapshotEvent.TierProgress(TIER_NAMES[i], done, tasks.size(),
-				thresholds[i] > 0 ? thresholds[i] : null));
+				thresholds[i] > 0 ? thresholds[i] : null, tasks.size() * POINTS_PER_TASK[i]));
 		}
 
 		if (onRead != null)

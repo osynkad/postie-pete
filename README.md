@@ -353,7 +353,7 @@ Every completed combat task with your points and tier (the example below uses ma
 | `completedTasks` | number | Number of completed tasks (the length of `completedTaskIds`). |
 | `points` | number | Combat achievement points, from the game's own counter. |
 | `tier` | string \| null | Highest tier whose points threshold you've reached: `"easy"`, `"medium"`, `"hard"`, `"elite"`, `"master"` or `"grandmaster"`. `null` before reaching easy. |
-| `tiers` | array | Progress per tier, easy first, as `{ "tier": string, "completed": number, "total": number, "pointsThreshold": number \| null }`. `pointsThreshold` is the points needed for the tier, `null` if the game didn't report it. |
+| `tiers` | array | Progress per tier, easy first, as `{ "tier": string, "completed": number, "total": number, "pointsThreshold": number \| null, "maxPoints": number }`. `completed` and `total` are the tier's completed and existing tasks; `total` comes from the game's own task list, so new tasks are counted as soon as the game adds them. `pointsThreshold` is the points needed to reach the tier, as the game reports it (`null` if it didn't). `maxPoints` is what all the tier's tasks are worth together: `total` × the points per task (easy 1, medium 2, hard 3, elite 4, master 5, grandmaster 6). Together they let you keep a tier table up to date without another source. |
 
 ```json
 {
@@ -366,12 +366,12 @@ Every completed combat task with your points and tier (the example below uses ma
   "points": 7,
   "tier": null,
   "tiers": [
-    { "tier": "easy", "completed": 4, "total": 33, "pointsThreshold": 33 },
-    { "tier": "medium", "completed": 0, "total": 41, "pointsThreshold": 115 },
-    { "tier": "hard", "completed": 1, "total": 66, "pointsThreshold": 304 },
-    { "tier": "elite", "completed": 0, "total": 140, "pointsThreshold": 820 },
-    { "tier": "master", "completed": 0, "total": 172, "pointsThreshold": 1465 },
-    { "tier": "grandmaster", "completed": 0, "total": 147, "pointsThreshold": 2005 }
+    { "tier": "easy", "completed": 4, "total": 33, "pointsThreshold": 33, "maxPoints": 33 },
+    { "tier": "medium", "completed": 0, "total": 41, "pointsThreshold": 115, "maxPoints": 82 },
+    { "tier": "hard", "completed": 1, "total": 66, "pointsThreshold": 304, "maxPoints": 198 },
+    { "tier": "elite", "completed": 0, "total": 140, "pointsThreshold": 820, "maxPoints": 560 },
+    { "tier": "master", "completed": 0, "total": 172, "pointsThreshold": 1465, "maxPoints": 860 },
+    { "tier": "grandmaster", "completed": 0, "total": 147, "pointsThreshold": 2005, "maxPoints": 882 }
   ]
 }
 ```
