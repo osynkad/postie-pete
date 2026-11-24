@@ -27,7 +27,9 @@ Snapshots of your whole collection log and combat achievements aren't events, so
 | **Loot** › **Send event** | on | Send `loot` events. |
 | **Loot** › **Send gear** | on | Send your equipment, inventory, rune pouch and quiver from the start of the trip with boss kills, as [`playerItems`](#player-items). When off, `playerItems` is always `null`. |
 | **Collection log** › **Send event** | on | Send `collection_log` events. |
+| **Collection log** › **Send full log when opened** | on | Send a [`collection_log_snapshot`](#collection_log_snapshot) each time you open the collection log. When off, the plugin leaves the collection log alone. |
 | **Combat achievements** › **Send event** | on | Send `combat_achievement` events. |
+| **Combat achievements** › **Send all tasks when opened** | on | Send a [`combat_achievement_snapshot`](#combat_achievement_snapshot) each time you open the combat achievements interface. |
 
 ## Events
 

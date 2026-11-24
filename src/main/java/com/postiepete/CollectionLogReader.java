@@ -176,7 +176,7 @@ class CollectionLogReader
 		}
 
 		// Leave the interface alone unless the snapshot will actually be sent.
-		if (PostiePetePlugin.endpointUrls(config.endpointUrl()).isEmpty())
+		if (!config.syncCollectionLog() || PostiePetePlugin.endpointUrls(config.endpointUrl()).isEmpty())
 		{
 			reading = false;
 			return;

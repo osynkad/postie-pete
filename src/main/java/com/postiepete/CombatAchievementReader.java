@@ -210,7 +210,7 @@ class CombatAchievementReader
 	 */
 	private void read()
 	{
-		if (PostiePetePlugin.endpointUrls(config.endpointUrl()).isEmpty())
+		if (!config.syncCombatAchievements() || PostiePetePlugin.endpointUrls(config.endpointUrl()).isEmpty())
 		{
 			return;
 		}

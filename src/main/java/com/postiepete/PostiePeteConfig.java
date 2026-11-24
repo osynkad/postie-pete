@@ -84,6 +84,19 @@ public interface PostiePeteConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "syncCollectionLog",
+		name = "Send full log when opened",
+		description = "Send every item in your collection log each time you open it in game. When off, the plugin"
+			+ " leaves the collection log alone.",
+		section = collectionLogSection,
+		position = 1
+	)
+	default boolean syncCollectionLog()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "sendCombatAchievement",
 		name = "Send event",
 		description = "Send a combat achievement event when you complete a combat task",
@@ -91,6 +104,19 @@ public interface PostiePeteConfig extends Config
 		position = 0
 	)
 	default boolean sendCombatAchievement()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "syncCombatAchievements",
+		name = "Send all tasks when opened",
+		description = "Send every combat task you have completed, with your points and tier progress, each time you"
+			+ " open the combat achievements interface in game",
+		section = combatAchievementSection,
+		position = 1
+	)
+	default boolean syncCombatAchievements()
 	{
 		return true;
 	}
