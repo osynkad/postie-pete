@@ -829,10 +829,11 @@ public class PostiePetePlugin extends Plugin
 
 	/**
 	 * The game's party size for a raid right now, from its party slots, or null if it has none or none are in use.
+	 * A kill that isn't a raid has no chest name, which the map can't look up.
 	 */
 	private Integer raidPartySize(String chestName)
 	{
-		int[] slots = RAID_PARTY_SLOTS.get(chestName);
+		int[] slots = chestName != null ? RAID_PARTY_SLOTS.get(chestName) : null;
 		if (slots == null)
 		{
 			return null;
