@@ -125,17 +125,18 @@ public class BossPhasesTest
 		// A kill's form changes as seen in game: her first three phases came as shield forms 4, 3 and 2, and the
 		// game printed a fight duration of 5:25.8
 		BossPhases phosani = BossPhases.phosanisNightmare();
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_INITIAL, NpcID.NIGHTMARE_CHALLENGE_PHASE_04, 892);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_PHASE_04, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04, 959);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04, NpcID.NIGHTMARE_CHALLENGE_BLAST, 1046);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_BLAST, NpcID.NIGHTMARE_CHALLENGE_PHASE_03, 1068);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_PHASE_03, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_03, 1121);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_03, NpcID.NIGHTMARE_CHALLENGE_BLAST, 1216);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_BLAST, NpcID.NIGHTMARE_CHALLENGE_PHASE_02, 1240);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_PHASE_02, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_02, 1308);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_02, NpcID.NIGHTMARE_CHALLENGE_BLAST, 1399);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_BLAST, NpcID.NIGHTMARE_CHALLENGE_PHASE_05, 1423);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_PHASE_05, NpcID.NIGHTMARE_CHALLENGE_DYING, 1435);
+		PhosaniNightmare tracker = new PhosaniNightmare(phosani);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_INITIAL, NpcID.NIGHTMARE_CHALLENGE_PHASE_04, 892);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_PHASE_04, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04, 959);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04, NpcID.NIGHTMARE_CHALLENGE_BLAST, 1046);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_BLAST, NpcID.NIGHTMARE_CHALLENGE_PHASE_03, 1068);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_PHASE_03, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_03, 1121);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_03, NpcID.NIGHTMARE_CHALLENGE_BLAST, 1216);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_BLAST, NpcID.NIGHTMARE_CHALLENGE_PHASE_02, 1240);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_PHASE_02, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_02, 1308);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_02, NpcID.NIGHTMARE_CHALLENGE_BLAST, 1399);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_BLAST, NpcID.NIGHTMARE_CHALLENGE_PHASE_05, 1423);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_PHASE_05, NpcID.NIGHTMARE_CHALLENGE_DYING, 1435);
 		// The kill count message comes after she started dying, and doesn't change the fight's end
 		phosani.finish(1444);
 
@@ -155,37 +156,52 @@ public class BossPhasesTest
 	}
 
 	@Test
-	public void phosaniSleepwalkersAppearingStartTheSleepwalkerPart()
+	public void phosaniPillarsChargedStartTheSleepwalkerPart()
 	{
+		// A kill's first phase as seen in game: the game said "All four totems are fully charged." with the last
+		// pillar's change, 6 ticks before she turned into her blast form
 		BossPhases phosani = BossPhases.phosanisNightmare();
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_INITIAL, NpcID.NIGHTMARE_CHALLENGE_PHASE_04, 678);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_PHASE_04, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04, 725);
-		// The sleepwalkers appear 2 ticks before she turns into her blast form, and the rest of them change nothing
-		PhosaniNightmare.onSleepwalkerSpawned(phosani, 827);
-		PhosaniNightmare.onSleepwalkerSpawned(phosani, 827);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04, NpcID.NIGHTMARE_CHALLENGE_BLAST, 829);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_BLAST, NpcID.NIGHTMARE_CHALLENGE_PHASE_03, 851);
-		// Not in a pillar part
-		PhosaniNightmare.onSleepwalkerSpawned(phosani, 860);
+		PhosaniNightmare tracker = new PhosaniNightmare(phosani);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_INITIAL, NpcID.NIGHTMARE_CHALLENGE_PHASE_01, 93);
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_1_DORMANT, NpcID.NIGHTMARE_TOTEM_1_READY, 209);
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_2_DORMANT, NpcID.NIGHTMARE_TOTEM_2_READY, 209);
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_3_DORMANT, NpcID.NIGHTMARE_TOTEM_3_READY, 209);
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_4_DORMANT, NpcID.NIGHTMARE_TOTEM_4_READY, 209);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_PHASE_01, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_01, 209);
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_2_READY, NpcID.NIGHTMARE_TOTEM_2_CHARGED, 239);
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_1_READY, NpcID.NIGHTMARE_TOTEM_1_CHARGED, 270);
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_3_READY, NpcID.NIGHTMARE_TOTEM_3_CHARGED, 280);
+		assertEquals("Pillar P1", phosani.currentPart());
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_4_READY, NpcID.NIGHTMARE_TOTEM_4_CHARGED, 305);
+		// The pillars go dormant again, and her blast form changes nothing
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_4_CHARGED, NpcID.NIGHTMARE_TOTEM_4_DORMANT, 308);
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_3_CHARGED, NpcID.NIGHTMARE_TOTEM_3_DORMANT, 308);
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_1_CHARGED, NpcID.NIGHTMARE_TOTEM_1_DORMANT, 308);
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_2_CHARGED, NpcID.NIGHTMARE_TOTEM_2_DORMANT, 308);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_01, NpcID.NIGHTMARE_CHALLENGE_BLAST, 311);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_BLAST, NpcID.NIGHTMARE_CHALLENGE_PHASE_04, 332);
+		// Charging a pillar outside a pillar part changes nothing
+		tracker.onPillarChanged(NpcID.NIGHTMARE_TOTEM_1_DORMANT, NpcID.NIGHTMARE_TOTEM_1_CHARGED, 340);
 
 		assertEquals("Phosani P2", phosani.currentPart());
 		assertEquals(Arrays.asList(
-			new LootEvent.Split("Phosani P1", 28.2),
-			new LootEvent.Split("Pillar P1", 61.2),
-			new LootEvent.Split("Sleepwalker P1", 14.4)), phosani.doneSplits());
+			new LootEvent.Split("Phosani P1", 69.6),
+			new LootEvent.Split("Pillar P1", 57.6),
+			new LootEvent.Split("Sleepwalker P1", 16.2)), phosani.doneSplits());
 	}
 
 	@Test
 	public void phosaniFinalPhaseFormChangesDontEndIt()
 	{
 		BossPhases phosani = BossPhases.phosanisNightmare();
+		PhosaniNightmare tracker = new PhosaniNightmare(phosani);
 		phosani.start(0);
 		for (int tick = 10; tick <= 90; tick += 10)
 		{
 			phosani.next(tick);
 		}
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_PHASE_05, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04, 95);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04, NpcID.NIGHTMARE_CHALLENGE_BLAST, 98);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_PHASE_05, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04, 95);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04, NpcID.NIGHTMARE_CHALLENGE_BLAST, 98);
 
 		assertEquals("Phosani final phase", phosani.currentPart());
 	}
@@ -194,10 +210,11 @@ public class BossPhasesTest
 	public void phosaniWakingUpStartsANewFight()
 	{
 		BossPhases phosani = BossPhases.phosanisNightmare();
+		PhosaniNightmare tracker = new PhosaniNightmare(phosani);
 		phosani.onHit(500);
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_PHASE_01, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_01, 600);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_PHASE_01, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_01, 600);
 
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_INITIAL, NpcID.NIGHTMARE_CHALLENGE_PHASE_01, 1000);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_INITIAL, NpcID.NIGHTMARE_CHALLENGE_PHASE_01, 1000);
 		phosani.onHit(1010);
 
 		assertEquals("Phosani P1", phosani.currentPart());
@@ -209,7 +226,8 @@ public class BossPhasesTest
 	public void phosaniFormChangesWithoutAFightAreIgnored()
 	{
 		BossPhases phosani = BossPhases.phosanisNightmare();
-		PhosaniNightmare.onFormChanged(phosani, NpcID.NIGHTMARE_CHALLENGE_PHASE_01, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_01, 600);
+		PhosaniNightmare tracker = new PhosaniNightmare(phosani);
+		tracker.onFormChanged(NpcID.NIGHTMARE_CHALLENGE_PHASE_01, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_01, 600);
 
 		assertFalse(phosani.isActive());
 	}

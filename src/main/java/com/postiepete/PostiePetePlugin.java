@@ -46,7 +46,6 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.NpcChanged;
-import net.runelite.api.events.NpcSpawned;
 import net.runelite.api.events.PlayerDespawned;
 import net.runelite.api.events.PlayerSpawned;
 import net.runelite.api.events.VarbitChanged;
@@ -280,6 +279,7 @@ public class PostiePetePlugin extends Plugin
 	private final CoxRooms coxRooms = new CoxRooms();
 	private final TombsOfAmascut tombsOfAmascut = new TombsOfAmascut();
 	private final BossPhases phosanisNightmare = BossPhases.phosanisNightmare();
+	private final PhosaniNightmare phosaniPhases = new PhosaniNightmare(phosanisNightmare);
 	// The bosses whose phases are followed, for their loot
 	private final List<BossPhases> bossPhases = List.of(phosanisNightmare);
 
@@ -352,6 +352,7 @@ public class PostiePetePlugin extends Plugin
 		coxRooms.reset();
 		tombsOfAmascut.reset();
 		bossPhases.forEach(BossPhases::reset);
+		phosaniPhases.reset();
 		killCounts.reset();
 		tripGear.end();
 		fightStarts.reset();
@@ -588,6 +589,7 @@ public class PostiePetePlugin extends Plugin
 			fightCaves.onLogout();
 			inferno.onLogout();
 			bossPhases.forEach(BossPhases::reset);
+			phosaniPhases.reset();
 		}
 
 		// The Loot Tracker warning shows once per login, so a hop doesn't repeat it
@@ -656,21 +658,7 @@ public class PostiePetePlugin extends Plugin
 	}
 
 	/**
-	 * The first sleepwalker to appear after Phosani's Nightmare's pillars are charged starts her sleepwalker part.
-	 */
-	@Subscribe
-	public void onNpcSpawned(NpcSpawned event)
-	{
-		if (PhosaniNightmare.isSleepwalker(event.getNpc().getId()))
-		{
-			int tick = client.getTickCount();
-			log.debug("Phosani's Nightmare sleepwalker appeared (tick {})", tick);
-			PhosaniNightmare.onSleepwalkerSpawned(phosanisNightmare, tick);
-		}
-	}
-
-	/**
-	 * Phosani's Nightmare's form changes mark her phases.
+	 * Phosani's Nightmare's and her pillars' form changes mark her phases.
 	 */
 	@Subscribe
 	public void onNpcChanged(NpcChanged event)
@@ -681,7 +669,13 @@ public class PostiePetePlugin extends Plugin
 		{
 			int tick = client.getTickCount();
 			log.debug("Phosani's Nightmare changed from {} to {} (tick {})", oldId, newId, tick);
-			PhosaniNightmare.onFormChanged(phosanisNightmare, oldId, newId, tick);
+			phosaniPhases.onFormChanged(oldId, newId, tick);
+		}
+		else if (PhosaniNightmare.isPillar(oldId) || PhosaniNightmare.isPillar(newId))
+		{
+			int tick = client.getTickCount();
+			log.debug("Phosani's Nightmare pillar changed from {} to {} (tick {})", oldId, newId, tick);
+			phosaniPhases.onPillarChanged(oldId, newId, tick);
 		}
 	}
 
