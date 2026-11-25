@@ -181,8 +181,8 @@ public class PostiePetePlugin extends Plugin
 	private static final int PRUNE_INTERVAL_TICKS = 100;
 
 	// NPC loot that comes some time after the kill count message instead of on its tick: the Maggot King's comes
-	// when its eggs are taken (seen in game)
-	private static final Set<String> LATE_NPC_LOOT = Set.of("Maggot King");
+	// when its eggs are taken, Yama's 6 ticks after the kill count (seen in game)
+	private static final Set<String> LATE_NPC_LOOT = Set.of("Maggot King", "Yama");
 
 	// Skilling bosses: the players around are a crowd, not a team, so no team size is sent
 	private static final Set<String> NO_TEAM = Set.of("Wintertodt", "Tempoross", "Zalcano");
