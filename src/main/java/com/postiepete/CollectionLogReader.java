@@ -48,6 +48,7 @@ import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.eventbus.Subscribe;
 
 /**
@@ -178,6 +179,14 @@ class CollectionLogReader
 		// Leave the interface alone unless the snapshot will actually be sent.
 		if (!config.syncCollectionLog() || PostiePetePlugin.endpointUrls(config.endpointUrl()).isEmpty())
 		{
+			reading = false;
+			return;
+		}
+
+		// Opened from an adventure log in a house: it may be someone else's collection log
+		if (client.getVarbitValue(VarbitID.COLLECTION_POH_HOST_BOOK_OPEN) != 0)
+		{
+			log.debug("Collection log opened from an adventure log, snapshot not sent");
 			reading = false;
 			return;
 		}

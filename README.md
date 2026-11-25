@@ -14,7 +14,7 @@ Postie Pete only collects and sends. It doesn't store, display or analyse anythi
   - how many players were in the fight (the number only, never their names)
 - **Collection log**: every new item added to your collection log.
 - **Combat achievements**: every combat task you complete.
-- **Your whole collection log and combat achievements**: each time you open them in game, so what you got before installing the plugin is included too.
+- **Your whole collection log and combat achievements**: each time you open them in game, so what you got before installing the plugin is included too. A collection log opened from an adventure log in a player-owned house isn't sent, since it may be someone else's.
 
 Kills that give no loot at the kill, like the Inferno, Fight Caves, Wintertodt and Tempoross, are still sent with their kill count and time.
 
