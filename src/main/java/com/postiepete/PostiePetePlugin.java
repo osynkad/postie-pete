@@ -39,6 +39,7 @@ import net.runelite.api.Player;
 import net.runelite.api.Point;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameStateChanged;
@@ -46,6 +47,7 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.NpcChanged;
+import net.runelite.api.events.NpcSpawned;
 import net.runelite.api.events.PlayerDespawned;
 import net.runelite.api.events.PlayerSpawned;
 import net.runelite.api.events.VarbitChanged;
@@ -203,6 +205,14 @@ public class PostiePetePlugin extends Plugin
 	private static final String SOL_HEREDIT = "Sol Heredit";
 	private static final String DOOM_OF_MOKHAIOTL = "Doom of Mokhaiotl";
 
+	// The game's Yama fight duration starts this many ticks before Yama appears (seen in game: appeared on tick
+	// 283, died on 610, printed 3:18.00 = 330 ticks; the Timers-CA plugin starts it 3 ticks early too)
+	private static final int YAMA_FIGHT_START_BEFORE_SPAWN_TICKS = 3;
+
+	// The fewest tiles the player moves from one tick to the next for it to be a teleport. The teleports to and from
+	// the Judge of Yama are 20+ tiles, while walking into the Judge's arena moves the player 3 tiles a tick.
+	private static final int MIN_TELEPORT_TILES = 10;
+
 	// A full run, the only kind that gets a duration. Doom can continue past level 8, but only levels 1-8 are timed.
 	private static final int COLOSSEUM_FULL_RUN_WAVES = 12;
 	private static final int DOOM_FULL_RUN_LEVELS = 8;
@@ -278,10 +288,13 @@ public class PostiePetePlugin extends Plugin
 	private final ChambersOfXeric chambersOfXeric = new ChambersOfXeric();
 	private final CoxRooms coxRooms = new CoxRooms();
 	private final TombsOfAmascut tombsOfAmascut = new TombsOfAmascut();
+	private final BossPhases yama = BossPhases.yama();
 	private final BossPhases phosanisNightmare = BossPhases.phosanisNightmare();
 	private final PhosaniNightmare phosaniPhases = new PhosaniNightmare(phosanisNightmare);
 	// The bosses whose phases are followed, for their loot
-	private final List<BossPhases> bossPhases = List.of(phosanisNightmare);
+	private final List<BossPhases> bossPhases = List.of(yama, phosanisNightmare);
+	// The player's location on the last tick of a Yama fight, to see when they are teleported
+	private WorldPoint yamaPlayerLocation;
 
 	private final TripGear tripGear = new TripGear();
 	private final FightStarts fightStarts = new FightStarts();
@@ -353,6 +366,7 @@ public class PostiePetePlugin extends Plugin
 		tombsOfAmascut.reset();
 		bossPhases.forEach(BossPhases::reset);
 		phosaniPhases.reset();
+		yamaPlayerLocation = null;
 		killCounts.reset();
 		tripGear.end();
 		fightStarts.reset();
@@ -590,6 +604,7 @@ public class PostiePetePlugin extends Plugin
 			inferno.onLogout();
 			bossPhases.forEach(BossPhases::reset);
 			phosaniPhases.reset();
+			yamaPlayerLocation = null;
 		}
 
 		// The Loot Tracker warning shows once per login, so a hop doesn't repeat it
@@ -635,6 +650,7 @@ public class PostiePetePlugin extends Plugin
 
 		checkCoxRooms();
 		checkBossPhasesLeft(tick);
+		checkYamaTeleport(tick);
 	}
 
 	/**
@@ -654,6 +670,58 @@ public class PostiePetePlugin extends Plugin
 				log.debug("Left the {} fight (tick {})", fight.boss(), tick);
 				fight.reset();
 			}
+		}
+	}
+
+	/**
+	 * Moves the Yama fight on to its next part when the player has been teleported: to the Judge of Yama, or back
+	 * to Yama.
+	 */
+	private void checkYamaTeleport(int tick)
+	{
+		Player localPlayer = client.getLocalPlayer();
+		if (!yama.isActive() || localPlayer == null)
+		{
+			yamaPlayerLocation = null;
+			return;
+		}
+
+		WorldPoint location = localPlayer.getWorldLocation();
+		WorldPoint previous = yamaPlayerLocation;
+		yamaPlayerLocation = location;
+		if (previous != null && previous.distanceTo(location) >= MIN_TELEPORT_TILES)
+		{
+			log.debug("Teleported in the Yama fight from {} to {} (tick {})", previous, location, tick);
+			yama.next(tick);
+		}
+	}
+
+	/**
+	 * Yama appearing starts his fight. Not when he comes back into view during a fight.
+	 */
+	@Subscribe
+	public void onNpcSpawned(NpcSpawned event)
+	{
+		if (event.getNpc().getId() == NpcID.YAMA && !yama.isActive())
+		{
+			int tick = client.getTickCount();
+			log.debug("Yama appeared (tick {})", tick);
+			yama.start(tick - YAMA_FIGHT_START_BEFORE_SPAWN_TICKS);
+		}
+	}
+
+	/**
+	 * Yama's health reaching 0 ends his fight, where the game's fight duration ends, some ticks before the kill
+	 * count message.
+	 */
+	@Subscribe
+	public void onActorDeath(ActorDeath event)
+	{
+		if (event.getActor() instanceof NPC && ((NPC) event.getActor()).getId() == NpcID.YAMA)
+		{
+			int tick = client.getTickCount();
+			log.debug("Yama died (tick {})", tick);
+			yama.finish(tick);
 		}
 	}
 
@@ -916,11 +984,20 @@ public class PostiePetePlugin extends Plugin
 	@Subscribe
 	public void onHitsplatApplied(HitsplatApplied event)
 	{
-		// Phosani's Nightmare's fight starts when she wakes up, and only falls back on the first hit (e.g. the plugin
-		// was turned on mid-fight)
-		if (event.getActor() instanceof NPC && PhosaniNightmare.isFightForm(((NPC) event.getActor()).getId()))
+		// Yama's and Phosani's Nightmare's fights start when they appear and wake up. Anyone's first hit is only a
+		// fallback (e.g. the plugin was turned on mid-fight). Not a hit on a dead Yama, which would start a new
+		// fight before the loot took the last one's splits.
+		if (event.getActor() instanceof NPC)
 		{
-			phosanisNightmare.onHit(client.getTickCount());
+			int npcId = ((NPC) event.getActor()).getId();
+			if (npcId == NpcID.YAMA && !event.getActor().isDead())
+			{
+				yama.onHit(client.getTickCount());
+			}
+			else if (PhosaniNightmare.isFightForm(npcId))
+			{
+				phosanisNightmare.onHit(client.getTickCount());
+			}
 		}
 
 		if (!event.getHitsplat().isMine() || !(event.getActor() instanceof NPC))

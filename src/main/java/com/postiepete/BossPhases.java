@@ -8,10 +8,23 @@ import java.util.List;
 /**
  * Follows a boss fight's phases, so they can be sent as splits with its loot. The fight is a fixed list of parts,
  * timed in game ticks, and moved on to the next part by whatever marks the change for the boss: see
- * {@link #phosanisNightmare}.
+ * {@link #YAMA} and {@link #PHOSANIS_NIGHTMARE}.
  */
 class BossPhases
 {
+	/**
+	 * Yama's phases. At 66.6% and 33.3% of his health Yama teleports the players away to fight the Judge of Yama,
+	 * and they are teleported back when it dies. Each phase is split at those teleports: the Judge's part starts
+	 * when the player has been teleported, so the time between Yama's threshold and the teleport counts as Yama's.
+	 * The third phase has no Judge. The fight runs from Yama appearing until his health reaches 0, as the game's
+	 * fight duration does.
+	 */
+	static BossPhases yama()
+	{
+		return new BossPhases(YAMA,
+			"Yama P1", "Judge P1", "Yama P2", "Judge P2", "Yama P3");
+	}
+
 	/**
 	 * Phosani's Nightmare's phases. In each of the first three she has a shield; once it is broken she is weak,
 	 * and the four pillars (totems) must be charged, which ends her weak form. Then sleepwalkers walk to her while
@@ -30,6 +43,7 @@ class BossPhases
 	/**
 	 * The bosses' names as their kill count messages and loot name them.
 	 */
+	static final String YAMA = "Yama";
 	static final String PHOSANIS_NIGHTMARE = "Phosani's Nightmare";
 
 	private final String boss;

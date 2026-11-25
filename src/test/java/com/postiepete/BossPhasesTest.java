@@ -18,6 +18,27 @@ public class BossPhasesTest
 	}
 
 	@Test
+	public void eachYamaPhaseIsSplitAtTheJudgeTeleports()
+	{
+		BossPhases yama = BossPhases.yama();
+		yama.onHit(1000);
+		yama.onHit(1004);
+		// To the first Judge after 60 seconds, back after 30
+		yama.next(1100);
+		yama.next(1150);
+		yama.next(1250);
+		yama.next(1300);
+		yama.finish(1400);
+
+		assertEquals(Arrays.asList(
+			new LootEvent.Split("Yama P1", 60.0),
+			new LootEvent.Split("Judge P1", 30.0),
+			new LootEvent.Split("Yama P2", 60.0),
+			new LootEvent.Split("Judge P2", 30.0),
+			new LootEvent.Split("Yama P3", 60.0)), yama.consumeSplits(1401));
+	}
+
+	@Test
 	public void partsAreOnlyMovedOnDuringAFight()
 	{
 		BossPhases fight = boss();
