@@ -97,7 +97,8 @@ class KillCounts
 	/**
 	 * The kill count for a reward chest: the last message if it is recent enough and names the chest, e.g. the
 	 * "Theatre of Blood" chest after "Theatre of Blood: Hard Mode", or the "Barrows" chest after "Barrows chest".
-	 * Consumed, so it can't be attached to a later chest.
+	 * Also for NPC loot that comes some time after its kill (the Maggot King's), which the name keeps from taking
+	 * another activity's count. Consumed, so it can't be attached to a later chest.
 	 */
 	LootEvent.Kill claimForChest(String chestName, int tick)
 	{

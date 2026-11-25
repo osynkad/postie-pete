@@ -178,6 +178,10 @@ public class PostiePetePlugin extends Plugin
 	// How often stale fight starts and nearby players are dropped
 	private static final int PRUNE_INTERVAL_TICKS = 100;
 
+	// NPC loot that comes some time after the kill count message instead of on its tick: the Maggot King's comes
+	// when its eggs are taken (seen in game)
+	private static final Set<String> LATE_NPC_LOOT = Set.of("Maggot King");
+
 	// Skilling bosses: the players around are a crowd, not a team, so no team size is sent
 	private static final Set<String> NO_TEAM = Set.of("Wintertodt", "Tempoross", "Zalcano");
 
@@ -496,9 +500,11 @@ public class PostiePetePlugin extends Plugin
 	{
 		// Consumed even when loot isn't sent, so it can't be attached to a later kill
 		int tick = client.getTickCount();
-		LootEvent.KillTime killTime = consumeKillTime(null, KILL_TIME_MAX_AGE_TICKS);
+		// Loot that comes some time after its kill only takes a kill count that names it, like a chest's
+		boolean lateLoot = LATE_NPC_LOOT.contains(event.getName());
+		LootEvent.KillTime killTime = consumeKillTime(null, lateLoot ? CHEST_TIME_MAX_AGE_TICKS : KILL_TIME_MAX_AGE_TICKS);
 		Integer fightTimeStart = fightStartTick(killTime);
-		LootEvent.Kill kill = killCounts.claimForNpcLoot(tick);
+		LootEvent.Kill kill = lateLoot ? killCounts.claimForChest(event.getName(), tick) : killCounts.claimForNpcLoot(tick);
 		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
 		// Bosses the game prints no time for (e.g. Corp) are timed from the first hit
 		if (killTime == null)

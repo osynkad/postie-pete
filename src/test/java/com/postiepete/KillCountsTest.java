@@ -83,6 +83,16 @@ public class KillCountsTest
 	}
 
 	@Test
+	public void lateNpcLootClaimsItsKillCountByName()
+	{
+		// The Maggot King's loot comes when its eggs are taken, some ticks after the kill count message
+		killCounts.onMessage("Your Maggot King kill count is: <col=ff0000>32</col>.", 100);
+		assertNull(killCounts.claimForNpcLoot(115));
+		assertEquals(kill("Maggot King", 32), killCounts.claimForChest("Maggot King", 115));
+		assertNull(killCounts.claimForChest("Maggot King", 116));
+	}
+
+	@Test
 	public void chestClaimsAKillCountThatNamesIt()
 	{
 		killCounts.onMessage("Your completed Theatre of Blood: Hard Mode count is: <col=ff0000>40</col>.", 100);
