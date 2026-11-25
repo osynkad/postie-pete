@@ -45,10 +45,13 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.NpcChanged;
+import net.runelite.api.events.NpcSpawned;
 import net.runelite.api.events.PlayerDespawned;
 import net.runelite.api.events.PlayerSpawned;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
@@ -276,6 +279,9 @@ public class PostiePetePlugin extends Plugin
 	private final ChambersOfXeric chambersOfXeric = new ChambersOfXeric();
 	private final CoxRooms coxRooms = new CoxRooms();
 	private final TombsOfAmascut tombsOfAmascut = new TombsOfAmascut();
+	private final BossPhases phosanisNightmare = BossPhases.phosanisNightmare();
+	// The bosses whose phases are followed, for their loot
+	private final List<BossPhases> bossPhases = List.of(phosanisNightmare);
 
 	private final TripGear tripGear = new TripGear();
 	private final FightStarts fightStarts = new FightStarts();
@@ -345,6 +351,7 @@ public class PostiePetePlugin extends Plugin
 		chambersOfXeric.reset();
 		coxRooms.reset();
 		tombsOfAmascut.reset();
+		bossPhases.forEach(BossPhases::reset);
 		killCounts.reset();
 		tripGear.end();
 		fightStarts.reset();
@@ -511,6 +518,14 @@ public class PostiePetePlugin extends Plugin
 		{
 			killTime = timeFromFirstHit(firstHit, tick);
 		}
+		List<LootEvent.Split> splits = null;
+		for (BossPhases fight : bossPhases)
+		{
+			if (fight.isBoss(event.getName()) || kill != null && fight.isBoss(kill.getName()))
+			{
+				splits = fight.consumeSplits(tick);
+			}
+		}
 		log.debug("NPC loot: {} (tick {}), kill count {}", event.getName(), tick, kill);
 		if (!config.sendLoot())
 		{
@@ -521,7 +536,7 @@ public class PostiePetePlugin extends Plugin
 		PlayerItems gear = kill != null ? tripGear() : null;
 		LootEvent.Team team = kill != null ? teamFor(kill.getName(), firstKnown(fightTimeStart, firstHit), tick) : null;
 		postEvent(new LootEvent(common(localPlayer),
-			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null, null),
+			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null, splits),
 			toDrops(event.getItems()), gear, team));
 	}
 
@@ -572,6 +587,7 @@ public class PostiePetePlugin extends Plugin
 			doom.onLogout();
 			fightCaves.onLogout();
 			inferno.onLogout();
+			bossPhases.forEach(BossPhases::reset);
 		}
 
 		// The Loot Tracker warning shows once per login, so a hop doesn't repeat it
@@ -616,6 +632,57 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		checkCoxRooms();
+		checkBossPhasesLeft(tick);
+	}
+
+	/**
+	 * Forgets the boss fights the player has left (e.g. died or teleported out): they are all fought in an
+	 * instance.
+	 */
+	private void checkBossPhasesLeft(int tick)
+	{
+		if (client.getTopLevelWorldView().isInstance())
+		{
+			return;
+		}
+		for (BossPhases fight : bossPhases)
+		{
+			if (fight.isActive())
+			{
+				log.debug("Left the {} fight (tick {})", fight.boss(), tick);
+				fight.reset();
+			}
+		}
+	}
+
+	/**
+	 * The first sleepwalker to appear after Phosani's Nightmare's pillars are charged starts her sleepwalker part.
+	 */
+	@Subscribe
+	public void onNpcSpawned(NpcSpawned event)
+	{
+		if (PhosaniNightmare.isSleepwalker(event.getNpc().getId()))
+		{
+			int tick = client.getTickCount();
+			log.debug("Phosani's Nightmare sleepwalker appeared (tick {})", tick);
+			PhosaniNightmare.onSleepwalkerSpawned(phosanisNightmare, tick);
+		}
+	}
+
+	/**
+	 * Phosani's Nightmare's form changes mark her phases.
+	 */
+	@Subscribe
+	public void onNpcChanged(NpcChanged event)
+	{
+		int oldId = event.getOld().getId();
+		int newId = event.getNpc().getId();
+		if (oldId == NpcID.NIGHTMARE_CHALLENGE_INITIAL || PhosaniNightmare.isFightForm(oldId))
+		{
+			int tick = client.getTickCount();
+			log.debug("Phosani's Nightmare changed from {} to {} (tick {})", oldId, newId, tick);
+			PhosaniNightmare.onFormChanged(phosanisNightmare, oldId, newId, tick);
+		}
 	}
 
 	@Subscribe
@@ -854,6 +921,13 @@ public class PostiePetePlugin extends Plugin
 	@Subscribe
 	public void onHitsplatApplied(HitsplatApplied event)
 	{
+		// Phosani's Nightmare's fight starts when she wakes up, and only falls back on the first hit (e.g. the plugin
+		// was turned on mid-fight)
+		if (event.getActor() instanceof NPC && PhosaniNightmare.isFightForm(((NPC) event.getActor()).getId()))
+		{
+			phosanisNightmare.onHit(client.getTickCount());
+		}
+
 		if (!event.getHitsplat().isMine() || !(event.getActor() instanceof NPC))
 		{
 			return;
@@ -1085,6 +1159,13 @@ public class PostiePetePlugin extends Plugin
 			else if (INFERNO_KILL.equals(killCount.getName()))
 			{
 				inferno.finish(tick);
+			}
+			for (BossPhases fight : bossPhases)
+			{
+				if (fight.isBoss(killCount.getName()))
+				{
+					fight.finish(tick);
+				}
 			}
 
 			// A raid's completion: its party is still in the slots, the chest is opened later
