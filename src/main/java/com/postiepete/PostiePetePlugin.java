@@ -86,7 +86,7 @@ public class PostiePetePlugin extends Plugin
 	/**
 	 * Sent with every event as pluginVersion. Must match version in runelite-plugin.properties.
 	 */
-	static final String VERSION = "0.4.0";
+	static final String VERSION = "0.5.0";
 
 	private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
