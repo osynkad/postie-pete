@@ -62,6 +62,17 @@ public class WavePatternTest
 	}
 
 	@Test
+	public void doomLevelPastEightWithoutAColon()
+	{
+		// As seen in game, tags removed
+		Matcher matcher = PostiePetePlugin.DOOM_LEVEL_PATTERN.matcher(
+			"Delve level 8+ (21) duration: 1:35.40. Personal best: 0:54.0");
+		assertTrue(matcher.lookingAt());
+		assertEquals("21", matcher.group("deep"));
+		assertEquals("1:35.40", matcher.group("time"));
+	}
+
+	@Test
 	public void doomFullRunAsSeenInGame()
 	{
 		Matcher newBest = PostiePetePlugin.DOOM_FULL_RUN_PATTERN.matcher(
