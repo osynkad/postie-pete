@@ -128,6 +128,13 @@ public class PostiePetePlugin extends Plugin
 		"Delve level: (?<level>\\d+)\\+?(?: \\((?<deep>\\d+)\\))? duration:"
 			+ "(?: (?:<col=[0-9a-f]{6}>|@.+?@)?(?<time>[0-9:]+(?:\\.[0-9]+)?))?");
 
+	// "Delve level 1 - 8 duration: 11:35. Personal best: 9:38" (seen in game), sent after level 8's own duration:
+	// a full Doom of Mokhaiotl run's time. Groups as KILL_DURATION_PATTERN's, for parseKillTime.
+	static final Pattern DOOM_FULL_RUN_PATTERN = Pattern.compile(
+		"Delve level 1 ?- ?8 duration: (?:<col=[0-9a-f]{6}>|@.+?@)?(?<time>[0-9:]+(?:\\.[0-9]+)?)(?:</col>)?"
+			+ "(?:(?<newpb> \\(new personal best\\))"
+			+ "|\\.? ?Personal best: (?:</col>)?(?:<col=[0-9a-f]{6}>|@.+?@)?(?<pb>[0-9:]+(?:\\.[0-9]+)?))?");
+
 	// "<col=ef1020>Wave: 12</col>", tags removed: the start of a Fight Caves or Inferno wave
 	static final Pattern TZHAAR_WAVE_PATTERN = Pattern.compile("Wave: (?<wave>\\d+)");
 
@@ -173,7 +180,8 @@ public class PostiePetePlugin extends Plugin
 	// Skilling bosses: the players around are a crowd, not a team, so no team size is sent
 	private static final Set<String> NO_TEAM = Set.of("Wintertodt", "Tempoross", "Zalcano");
 
-	// "Total duration: @mes_hl_red@2:03.00</col>", sent right after the delve level duration
+	// "Total duration: @mes_hl_red@2:03.00</col>", sent right after the delve level duration. Not the run's time
+	// (it's not sent after level 8), only kept from being read as a kill time.
 	private static final Pattern DOOM_TOTAL_DURATION_PATTERN = Pattern.compile(
 		"Total duration: (?:<col=[0-9a-f]{6}>|@.+?@)(?<time>[0-9:]+(?:\\.[0-9]+)?)");
 
@@ -251,8 +259,7 @@ public class PostiePetePlugin extends Plugin
 	// The raid chest lastKillTime is kept for when it is a raid's completion time, otherwise null
 	private String lastKillTimeRaid;
 
-	private Integer lastDoomLevel;
-	private Double doomFullRunDuration;
+	private LootEvent.KillTime doomFullRunTime;
 
 	private final WaveRun colosseum = new WaveRun("Wave");
 	private final WaveRun doom = new WaveRun("Level");
@@ -323,8 +330,7 @@ public class PostiePetePlugin extends Plugin
 	{
 		lastKillTime = null;
 		lastKillTimeRaid = null;
-		lastDoomLevel = null;
-		doomFullRunDuration = null;
+		doomFullRunTime = null;
 		colosseum.reset();
 		doom.reset();
 		fightCaves.reset();
@@ -395,7 +401,7 @@ public class PostiePetePlugin extends Plugin
 		// Loot can be claimed after any wave / delve level. Send how far the run got, and a duration
 		// only for a full run. A full Colosseum run's time and personal best come from the game's "Colosseum
 		// duration:" message (seen in game), or else the run time the game keeps, without a personal best.
-		// Doom only reports per-level personal bests, so its run time has none.
+		// A full Doom run's comes from its "Delve level 1 - 8 duration:" message.
 		if (COLOSSEUM.equals(event.getName()))
 		{
 			wave = colosseum.lastWave();
@@ -422,7 +428,7 @@ public class PostiePetePlugin extends Plugin
 			// The Loot Tracker passes the delve level as metadata
 			wave = event.getMetadata() instanceof Integer ? (Integer) event.getMetadata() : null;
 			run = doom.consume();
-			completionTime = wave != null && wave >= DOOM_FULL_RUN_LEVELS ? withoutPersonalBest(doomFullRunDuration) : null;
+			completionTime = wave != null && wave >= DOOM_FULL_RUN_LEVELS ? doomFullRunTime : null;
 			bossKill = true;
 		}
 		else if (FracturedArchive.LOOT_SOURCE.equals(event.getName()))
@@ -450,8 +456,7 @@ public class PostiePetePlugin extends Plugin
 		{
 			splits = run.getSplits();
 		}
-		lastDoomLevel = null;
-		doomFullRunDuration = null;
+		doomFullRunTime = null;
 
 		// Raids have the game's party size, read when the raid was completed
 		boolean raidChest = event.getName() != null && event.getName().equals(RaidTeams.chestName(event.getName()));
@@ -979,23 +984,26 @@ public class PostiePetePlugin extends Plugin
 		if (matcher.lookingAt())
 		{
 			String deep = matcher.group("deep");
-			lastDoomLevel = Integer.parseInt(deep != null ? deep : matcher.group("level"));
-			if (lastDoomLevel == 1)
+			int level = Integer.parseInt(deep != null ? deep : matcher.group("level"));
+			if (level == 1)
 			{
-				doomFullRunDuration = null;
+				doomFullRunTime = null;
 			}
-			doom.onWaveCompleted(lastDoomLevel, optionalDuration(matcher), tick);
+			doom.onWaveCompleted(level, optionalDuration(matcher), tick);
 			return;
 		}
 
-		// Keep the run time at the end of level 8; time spent on deeper levels doesn't count
+		// Checked before KILL_DURATION_PATTERN, which would also match it
+		matcher = DOOM_FULL_RUN_PATTERN.matcher(event.getMessage());
+		if (matcher.find())
+		{
+			doomFullRunTime = parseKillTime(matcher);
+			return;
+		}
+
 		matcher = DOOM_TOTAL_DURATION_PATTERN.matcher(event.getMessage());
 		if (matcher.lookingAt())
 		{
-			if (lastDoomLevel != null && lastDoomLevel >= DOOM_FULL_RUN_LEVELS && doomFullRunDuration == null)
-			{
-				doomFullRunDuration = parseDuration(matcher.group("time"));
-			}
 			return;
 		}
 
