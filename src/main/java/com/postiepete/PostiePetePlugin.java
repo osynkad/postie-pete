@@ -123,9 +123,10 @@ public class PostiePetePlugin extends Plugin
 
 	// "Delve level: 2 duration: @mes_hl_red@1:19.80</col>. Personal best: ..." (Doom of Mokhaiotl). Levels past 8
 	// show the real level in brackets: "Delve level: 8+ (22) duration: 1:08.4. Personal best: 0:54.0" (seen in
-	// game). The time is optional, like the Colosseum's.
+	// game), also seen without the colon: "Delve level 8+ (21) duration: ...". The time is optional, like the
+	// Colosseum's.
 	static final Pattern DOOM_LEVEL_PATTERN = Pattern.compile(
-		"Delve level: (?<level>\\d+)\\+?(?: \\((?<deep>\\d+)\\))? duration:"
+		"Delve level:? (?<level>\\d+)\\+?(?: \\((?<deep>\\d+)\\))? duration:"
 			+ "(?: (?:<col=[0-9a-f]{6}>|@.+?@)?(?<time>[0-9:]+(?:\\.[0-9]+)?))?");
 
 	// "Delve level 1 - 8 duration: 11:35. Personal best: 9:38" (seen in game), sent after level 8's own duration:
