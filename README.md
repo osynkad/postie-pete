@@ -9,6 +9,7 @@ Postie Pete only collects and sends. It doesn't store, display or analyse anythi
 - **Loot**: every NPC drop, raid or reward chest, clue casket and so on, with each item's GE value. Boss kills also come with:
   - your kill count, kill time and personal best
   - wave, room and boss times for the Fortis Colosseum, Doom of Mokhaiotl, Fight Caves, Inferno, Chambers of Xeric, Theatre of Blood, Tombs of Amascut and Fractured Archive
+  - the damage you dealt and everyone's, so you can see your share: on the boss, or in the whole run for raids and wave activities like the Inferno
   - raid points (Chambers of Xeric and Tombs of Amascut) and invocation level (Tombs of Amascut)
   - the gear, inventory, rune pouch and quiver you brought on the trip
   - how many players were in the fight (the number only, never their names)

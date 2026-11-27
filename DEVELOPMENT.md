@@ -89,6 +89,8 @@ New event types and new fields may be added in later versions. Ignore event type
 | `newPersonalBest` | boolean | `true` when the game's kill time message said "(new personal best)", otherwise `false`. A time that ties the personal best is not a new one: the game shows it as "Personal best:", so `duration` equals `personalBest` but `newPersonalBest` is `false`. Always `false` when `personalBest` is `null`. |
 | `wave` | number \| null | How far the run got, for wave activities: the **Fortis Colosseum** wave when the loot was claimed (1–12), the **Doom of Mokhaiotl** delve level (can go past 8), and the **Fight Caves** / **Inferno** wave at the kill (63 / 69 for a full run). Doom's comes from the game's loot data, so it is always known. The others come from the last wave message the plugin saw, which can be later than the last split (a wave whose time couldn't be read has no split), and are `null` if no wave message was seen. `null` for all other loot. Use this rather than counting splits. |
 | `splits` | array \| null | Fortis Colosseum, Doom of Mokhaiotl, Fight Caves, Inferno, Chambers of Xeric, Theatre of Blood, Tombs of Amascut, Fractured Archive, Yama and Phosani's Nightmare only: the run's waves, delve levels, levels, rooms, bosses or phases with their times. See [Splits](#splits). `null` for all other loot, and when none were seen. |
+| `damage` | number \| null | Boss kills only: the damage you dealt, from your own hitsplats. For raids and wave activities (Chambers of Xeric, Theatre of Blood, Tombs of Amascut, Fractured Archive, Fortis Colosseum, Doom of Mokhaiotl, Fight Caves, Inferno) it is your damage on everything in the run up to the loot. For other bosses it is your damage on the boss in that kill, all its forms and parts included (e.g. both Grotesque Guardians, the Judge of Yama, every Barrows brother), but not its minions. Poison, venom and burn aren't counted. `null` for other loot, when you landed no hit on the boss, and when the start of the run wasn't seen. |
+| `totalDamage` | number \| null | Everyone's damage on the same NPCs as `damage`: yours, other players', and poison, venom and burn. That is the boss's hitpoints plus anything it healed, so `damage / totalDamage` is your share of the kill. Only damage on NPCs in view is counted, so it can miss teammates fighting elsewhere (e.g. another room in the Chambers of Xeric). `null` when `damage` is. |
 | `points` | object \| null | Chambers of Xeric (Challenge Mode included) and Tombs of Amascut (every mode) only: the raid's points when it was completed, which set the chance of a unique, as `{ "total": number \| null, "personal": number }`. `total` is the whole party's points, `personal` your own. The game doesn't send the Tombs of Amascut's party total, so its `total` is always `null`; its `personal` is what the game sends at the end of the raid. `null` for all other loot, and when the raid's completion wasn't seen. |
 | `invocation` | number \| null | Tombs of Amascut only (every mode): the raid's invocation level, e.g. `300`, as the game keeps it when the Wardens are defeated. `null` for all other loot, and when the raid's completion wasn't seen. |
 
@@ -184,6 +186,8 @@ A raid chest whose completion wasn't seen (e.g. the plugin was turned on mid-rai
     "newPersonalBest": false,
     "wave": null,
     "splits": null,
+    "damage": 415,
+    "totalDamage": 1210,
     "points": null,
     "invocation": null
   },
@@ -232,6 +236,8 @@ A Fortis Colosseum chest claimed after wave 3:
       { "name": "Wave 2", "duration": 69.6 },
       { "name": "Wave 3", "duration": 81.0 }
     ],
+    "damage": 2140,
+    "totalDamage": 2140,
     "points": null,
     "invocation": null
   },
@@ -273,6 +279,8 @@ A Fractured Archive chest:
       { "name": "Xarth", "duration": 152.7 },
       { "name": "Ocellus", "duration": 210.5 }
     ],
+    "damage": 6873,
+    "totalDamage": 19640,
     "points": null,
     "invocation": null
   },
