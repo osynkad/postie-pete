@@ -1,6 +1,7 @@
 package com.postiepete;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.util.Arrays;
 import java.util.List;
@@ -12,7 +13,7 @@ public class RaidSplitsTest
 	public void recordsTheSplits()
 	{
 		RaidSplits archive = new RaidSplits();
-		archive.onRunStarted();
+		archive.onRunStarted(0);
 		archive.onBossCompleted("Archive Guardian", 123.0);
 		archive.onBossCompleted("Bork", 141.0);
 		archive.onBossCompleted("Ocellus", 499.8);
@@ -32,12 +33,27 @@ public class RaidSplitsTest
 		// A wiped run
 		archive.onBossCompleted("Ezekiel", 100.0);
 
-		archive.onRunStarted();
+		archive.onRunStarted(0);
 		archive.onBossCompleted("Archive Guardian", 110.0);
 		archive.onRaidCompleted();
 
 		List<LootEvent.Split> splits = archive.consumeSplits();
 		assertEquals(Arrays.asList(new LootEvent.Split("Archive Guardian", 110.0)), splits);
+	}
+
+	@Test
+	public void keepsTheRunsStartForTheChest()
+	{
+		RaidSplits archive = new RaidSplits();
+		archive.onRunStarted(500);
+		archive.onBossCompleted("Archive Guardian", 110.0);
+		archive.onRaidCompleted();
+		// A new run can start before the chest is opened, and doesn't change the completed one's
+		archive.onRunStarted(900);
+
+		assertEquals(Integer.valueOf(500), archive.startTick());
+		archive.consumeSplits();
+		assertNull(archive.startTick());
 	}
 
 	@Test

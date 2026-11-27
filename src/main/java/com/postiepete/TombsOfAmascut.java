@@ -45,10 +45,11 @@ class TombsOfAmascut
 	private Integer personalPoints;
 
 	/**
-	 * Called on a game message, tags removed, with the raid level the game keeps at that time. Returns true if it
-	 * was a challenge's completion, which is then added to the run's splits. The Wardens' completes the raid.
+	 * Called on a game message, tags removed, with the raid level the game keeps at that time and the tick it came
+	 * on. Returns true if it was a challenge's completion, which is then added to the run's splits. The raid's
+	 * first challenge starts the run, which started that challenge's time before. The Wardens' completes the raid.
 	 */
-	boolean onChallengeMessage(String message, int raidLevel)
+	boolean onChallengeMessage(String message, int raidLevel, int tick)
 	{
 		Matcher matcher = CHALLENGE_COMPLETE_PATTERN.matcher(message);
 		if (!matcher.lookingAt() || !CHALLENGES.contains(matcher.group("room")))
@@ -61,7 +62,7 @@ class TombsOfAmascut
 		// Totals leave out the time between challenges, so the first one's is its own time
 		if (total != null && Math.abs(PostiePetePlugin.parseDuration(total) - duration) < 0.05)
 		{
-			splits.onRunStarted();
+			splits.onRunStarted(tick - WaveRun.secondsToTicks(duration));
 			personalPoints = null;
 		}
 		splits.onBossCompleted(room, duration);
@@ -87,6 +88,19 @@ class TombsOfAmascut
 	List<LootEvent.Split> consumeSplits()
 	{
 		return splits.consumeSplits();
+	}
+
+	/**
+	 * The tick the raid started, or null if its first challenge wasn't seen. Read before {@link #consumeSplits}.
+	 */
+	Integer startTick()
+	{
+		return splits.startTick();
+	}
+
+	void onLogout()
+	{
+		splits.onLogout();
 	}
 
 	/**

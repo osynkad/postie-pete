@@ -25,10 +25,11 @@ class TheatreOfBlood
 	private final RaidSplits splits = new RaidSplits();
 
 	/**
-	 * Called on a game message, tags removed. Returns true if it was a room's completion, which is then added to
-	 * the run's splits.
+	 * Called on a game message, tags removed, with the tick it came on. Returns true if it was a room's
+	 * completion, which is then added to the run's splits. The first room's starts the run, which started that
+	 * room's time before.
 	 */
-	boolean onRoomMessage(String message)
+	boolean onRoomMessage(String message, int tick)
 	{
 		Matcher matcher = ROOM_COMPLETE_PATTERN.matcher(message);
 		if (!matcher.lookingAt())
@@ -36,11 +37,12 @@ class TheatreOfBlood
 			return false;
 		}
 		String room = matcher.group("room");
+		double duration = PostiePetePlugin.parseDuration(matcher.group("time"));
 		if (room.equals(FIRST_ROOM))
 		{
-			splits.onRunStarted();
+			splits.onRunStarted(tick - WaveRun.secondsToTicks(duration));
 		}
-		splits.onBossCompleted(room, PostiePetePlugin.parseDuration(matcher.group("time")));
+		splits.onBossCompleted(room, duration);
 		return true;
 	}
 
@@ -61,6 +63,19 @@ class TheatreOfBlood
 	List<LootEvent.Split> consumeSplits()
 	{
 		return splits.consumeSplits();
+	}
+
+	/**
+	 * The tick the run started, or null if its first room wasn't seen. Read before {@link #consumeSplits}.
+	 */
+	Integer startTick()
+	{
+		return splits.startTick();
+	}
+
+	void onLogout()
+	{
+		splits.onLogout();
 	}
 
 	void reset()

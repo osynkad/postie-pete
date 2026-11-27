@@ -96,6 +96,21 @@ class LootEvent extends PostieEvent
 		List<Split> splits;
 
 		/**
+		 * The damage the player dealt, for boss kills, from their own hitsplats: on every NPC since the start of the
+		 * run for raids and wave activities, and on the boss in the fight for other bosses. Null for other loot, and
+		 * when the fight's or run's start wasn't seen.
+		 */
+		@With
+		Integer damage;
+
+		/**
+		 * Everyone's damage on what damage counts, the player's included, and poison, venom and burn: the boss's
+		 * hitpoints plus anything it healed, so damage / totalDamage is the player's share. Null when damage is.
+		 */
+		@With
+		Integer totalDamage;
+
+		/**
 		 * The raid's points, for the Chambers of Xeric and the Tombs of Amascut. Null for all other loot, and when
 		 * the raid's completion wasn't seen.
 		 */
@@ -125,7 +140,17 @@ class LootEvent extends PostieEvent
 				wave,
 				splits != null && !splits.isEmpty() ? splits : null,
 				null,
+				null,
+				null,
 				null);
+		}
+
+		/**
+		 * The source with the damage the player dealt and everyone's, or unchanged if it isn't known.
+		 */
+		Source withDamageOf(DamageLog.Damage damage)
+		{
+			return damage != null ? withDamage(damage.getDealt()).withTotalDamage(damage.getTotal()) : this;
 		}
 	}
 

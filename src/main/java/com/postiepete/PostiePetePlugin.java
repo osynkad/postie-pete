@@ -32,6 +32,7 @@ import net.runelite.api.EnumID;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameObject;
 import net.runelite.api.GameState;
+import net.runelite.api.Hitsplat;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
@@ -298,6 +299,7 @@ public class PostiePetePlugin extends Plugin
 
 	private final TripGear tripGear = new TripGear();
 	private final FightStarts fightStarts = new FightStarts();
+	private final DamageLog damageLog = new DamageLog();
 	private final NearbyPlayers nearbyPlayers = new NearbyPlayers();
 
 	// The other players in the scene, from their spawn and despawn events
@@ -370,6 +372,7 @@ public class PostiePetePlugin extends Plugin
 		killCounts.reset();
 		tripGear.end();
 		fightStarts.reset();
+		damageLog.reset();
 		nearbyPlayers.reset();
 		scenePlayers.clear();
 		raidTeams.reset();
@@ -416,12 +419,16 @@ public class PostiePetePlugin extends Plugin
 		LootEvent.KillTime completionTime = consumeKillTime(event.getName(), chestKillTimeMaxAge(event.getName()));
 		Integer fightTimeStart = fightStartTick(completionTime);
 		LootEvent.Kill kill = killCounts.claimForChest(event.getName(), tick);
-		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
+		FightStarts.Fight fight = kill != null ? fightStarts.take(kill.getName(), tick) : null;
+		Integer firstHit = fight != null ? fight.getFirstHitTick() : null;
 		Integer wave = null;
 		List<LootEvent.Split> splits = null;
 		LootEvent.Points points = null;
 		Integer invocation = null;
 		WaveRun.Run run = null;
+		// A raid's damage is the player's on everything since the raid's start, if it was seen
+		boolean raid = false;
+		Integer raidStart = null;
 		// Chests with a kill count message are boss kills, and so are these activities' chests without one
 		boolean bossKill = kill != null;
 
@@ -460,20 +467,28 @@ public class PostiePetePlugin extends Plugin
 		}
 		else if (FracturedArchive.LOOT_SOURCE.equals(event.getName()))
 		{
+			raid = true;
+			raidStart = fracturedArchive.startTick();
 			splits = fracturedArchive.consumeSplits();
 			bossKill = true;
 		}
 		else if (RaidTeams.THEATRE_OF_BLOOD.equals(event.getName()))
 		{
+			raid = true;
+			raidStart = theatreOfBlood.startTick();
 			splits = theatreOfBlood.consumeSplits();
 		}
 		else if (RaidTeams.CHAMBERS_OF_XERIC.equals(event.getName()))
 		{
+			raid = true;
+			raidStart = chambersOfXeric.startTick();
 			splits = chambersOfXeric.consumeSplits();
 			points = chambersOfXeric.consumePoints();
 		}
 		else if (RaidTeams.TOMBS_OF_AMASCUT.equals(event.getName()))
 		{
+			raid = true;
+			raidStart = tombsOfAmascut.startTick();
 			splits = tombsOfAmascut.consumeSplits();
 			invocation = tombsOfAmascut.consumeInvocation();
 			points = tombsOfAmascut.consumePoints();
@@ -512,9 +527,17 @@ public class PostiePetePlugin extends Plugin
 		{
 			team = bossKill ? teamFor(kill != null ? kill.getName() : null, firstKnown(runStart, fightTimeStart, firstHit), tick) : null;
 		}
+		DamageLog.Damage damage = null;
+		if (bossKill)
+		{
+			damage = run != null ? damageLog.since(runStart, tick)
+				: raid ? damageLog.since(raidStart, tick)
+				: fightDamage(fight);
+			log.debug("{} damage: {}", event.getName(), damage);
+		}
 		postEvent(new LootEvent(common(localPlayer),
-			LootEvent.Source.of(event.getName(), kill, null, completionTime, wave, splits).withPoints(points)
-				.withInvocation(invocation),
+			LootEvent.Source.of(event.getName(), kill, null, completionTime, wave, splits).withDamageOf(damage)
+				.withPoints(points).withInvocation(invocation),
 			toDrops(event.getItems()), gear, team));
 	}
 
@@ -527,18 +550,29 @@ public class PostiePetePlugin extends Plugin
 		LootEvent.KillTime killTime = consumeKillTime(null, lateLoot ? CHEST_TIME_MAX_AGE_TICKS : KILL_TIME_MAX_AGE_TICKS);
 		Integer fightTimeStart = fightStartTick(killTime);
 		LootEvent.Kill kill = lateLoot ? killCounts.claimForChest(event.getName(), tick) : killCounts.claimForNpcLoot(tick);
-		Integer firstHit = kill != null ? fightStarts.take(kill.getName(), tick) : null;
+		FightStarts.Fight fight = null;
+		if (kill != null)
+		{
+			// Some bosses' kill count messages name them differently from the NPC, e.g. "Leviathan" for "The
+			// Leviathan", whose fight is then under the NPC's name
+			fight = fightStarts.take(kill.getName(), tick);
+			if (fight == null)
+			{
+				fight = fightStarts.take(event.getName(), tick);
+			}
+		}
+		Integer firstHit = fight != null ? fight.getFirstHitTick() : null;
 		// Bosses the game prints no time for (e.g. Corp) are timed from the first hit
 		if (killTime == null)
 		{
 			killTime = timeFromFirstHit(firstHit, tick);
 		}
 		List<LootEvent.Split> splits = null;
-		for (BossPhases fight : bossPhases)
+		for (BossPhases phases : bossPhases)
 		{
-			if (fight.isBoss(event.getName()) || kill != null && fight.isBoss(kill.getName()))
+			if (phases.isBoss(event.getName()) || kill != null && phases.isBoss(kill.getName()))
 			{
-				splits = fight.consumeSplits(tick);
+				splits = phases.consumeSplits(tick);
 			}
 		}
 		log.debug("NPC loot: {} (tick {}), kill count {}", event.getName(), tick, kill);
@@ -550,8 +584,10 @@ public class PostiePetePlugin extends Plugin
 		// Only kills with a kill count message are boss kills
 		PlayerItems gear = kill != null ? tripGear() : null;
 		LootEvent.Team team = kill != null ? teamFor(kill.getName(), firstKnown(fightTimeStart, firstHit), tick) : null;
+		DamageLog.Damage damage = kill != null ? fightDamage(fight) : null;
 		postEvent(new LootEvent(common(localPlayer),
-			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null, splits),
+			LootEvent.Source.of(event.getName(), kill, npcId(event.getMetadata()), killTime, null, splits)
+				.withDamageOf(damage),
 			toDrops(event.getItems()), gear, team));
 	}
 
@@ -596,12 +632,17 @@ public class PostiePetePlugin extends Plugin
 			// Game ticks before and after aren't comparable, and the account can change
 			tripGear.end();
 			fightStarts.reset();
+			damageLog.reset();
 			nearbyPlayers.reset();
 			scenePlayers.clear();
 			colosseum.onLogout();
 			doom.onLogout();
 			fightCaves.onLogout();
 			inferno.onLogout();
+			fracturedArchive.onLogout();
+			theatreOfBlood.onLogout();
+			chambersOfXeric.onLogout();
+			tombsOfAmascut.onLogout();
 			bossPhases.forEach(BossPhases::reset);
 			phosaniPhases.reset();
 			yamaPlayerLocation = null;
@@ -639,6 +680,7 @@ public class PostiePetePlugin extends Plugin
 		if (tick % PRUNE_INTERVAL_TICKS == 0)
 		{
 			fightStarts.prune(tick);
+			damageLog.prune(tick);
 			nearbyPlayers.prune(tick);
 		}
 
@@ -819,7 +861,8 @@ public class PostiePetePlugin extends Plugin
 		// Consumed even when loot isn't sent, so they can't be attached to a later kill
 		LootEvent.KillTime killTime = consumeKillTime(null, KILL_TIME_MAX_AGE_TICKS);
 		Integer fightTimeStart = fightStartTick(killTime);
-		Integer firstHit = fightStarts.take(kill.getName(), client.getTickCount());
+		FightStarts.Fight fight = fightStarts.take(kill.getName(), client.getTickCount());
+		Integer firstHit = fight != null ? fight.getFirstHitTick() : null;
 		WaveRun.Run run = null;
 		Integer wave = null;
 		WaveRun waveRun = FIGHT_CAVES_KILL.equals(kill.getName()) ? fightCaves
@@ -846,9 +889,20 @@ public class PostiePetePlugin extends Plugin
 		Integer runStart = run != null ? run.getStartTick() : null;
 		PlayerItems gear = tripGear();
 		LootEvent.Team team = teamFor(kill.getName(), firstKnown(runStart, fightTimeStart, firstHit), client.getTickCount());
+		// The Fight Caves' and the Inferno's damage is the player's on every wave
+		DamageLog.Damage damage = waveRun != null ? damageLog.since(runStart, client.getTickCount()) : fightDamage(fight);
 		postEvent(new LootEvent(common(localPlayer),
-			LootEvent.Source.of(null, kill, null, killTime, wave, run != null ? run.getSplits() : null),
+			LootEvent.Source.of(null, kill, null, killTime, wave, run != null ? run.getSplits() : null)
+				.withDamageOf(damage),
 			Collections.emptyList(), gear, team));
+	}
+
+	/**
+	 * The damage the player and everyone dealt to a boss in its fight, or null if the player landed no hit on it.
+	 */
+	private static DamageLog.Damage fightDamage(FightStarts.Fight fight)
+	{
+		return fight != null ? new DamageLog.Damage(fight.getDamage(), fight.getTotalDamage()) : null;
 	}
 
 	/**
@@ -979,7 +1033,8 @@ public class PostiePetePlugin extends Plugin
 
 	/**
 	 * Counts the player's own hits on NPCs, so kills the game prints no time for know when their fight started,
-	 * and the first hit of a trip takes the gear snapshot.
+	 * kills know the damage the player dealt, and the first hit of a trip takes the gear snapshot. Everyone's
+	 * damage is counted too, for the kill's total damage.
 	 */
 	@Subscribe
 	public void onHitsplatApplied(HitsplatApplied event)
@@ -1000,14 +1055,25 @@ public class PostiePetePlugin extends Plugin
 			}
 		}
 
-		if (!event.getHitsplat().isMine() || !(event.getActor() instanceof NPC))
+		Hitsplat hitsplat = event.getHitsplat();
+		if (!(event.getActor() instanceof NPC) || !DamageLog.isDamage(hitsplat))
 		{
 			return;
 		}
 
 		NPC npc = (NPC) event.getActor();
+		String key = FightStarts.key(npc.getId(), npc.getName());
 		int tick = client.getTickCount();
-		fightStarts.onHit(FightStarts.key(npc.getId(), npc.getName()), tick);
+		int damage = hitsplat.getAmount();
+		boolean mine = hitsplat.isMine();
+		damageLog.onDamage(tick, damage, mine);
+		if (!mine)
+		{
+			// Teammates' hits, poison etc. only count towards the total damage
+			fightStarts.onOtherDamage(key, tick, damage);
+			return;
+		}
+		fightStarts.onHit(key, tick, damage);
 		tripGear.onHit(tick, this::capturePlayerItems);
 	}
 
@@ -1164,7 +1230,7 @@ public class PostiePetePlugin extends Plugin
 
 		if (message.equals(FracturedArchive.RUN_START_MESSAGE))
 		{
-			fracturedArchive.onRunStarted();
+			fracturedArchive.onRunStarted(tick);
 			return;
 		}
 
@@ -1181,7 +1247,7 @@ public class PostiePetePlugin extends Plugin
 
 		// Checked before the Fractured Archive's, which has the same message, and KILL_DURATION_PATTERN: a
 		// challenge's duration isn't the raid's time
-		if (tombsOfAmascut.onChallengeMessage(message, client.getVarbitValue(VarbitID.TOA_CLIENT_RAID_LEVEL)))
+		if (tombsOfAmascut.onChallengeMessage(message, client.getVarbitValue(VarbitID.TOA_CLIENT_RAID_LEVEL), tick))
 		{
 			LootEvent.KillTime completionTime = TombsOfAmascut.completionTime(event.getMessage());
 			if (completionTime != null)
@@ -1201,7 +1267,7 @@ public class PostiePetePlugin extends Plugin
 		}
 
 		// Also checked before KILL_DURATION_PATTERN: a room's duration isn't the raid's time
-		if (theatreOfBlood.onRoomMessage(message))
+		if (theatreOfBlood.onRoomMessage(message, tick))
 		{
 			LootEvent.KillTime completionTime = TheatreOfBlood.completionTime(event.getMessage());
 			if (completionTime != null)
@@ -1275,7 +1341,7 @@ public class PostiePetePlugin extends Plugin
 	{
 		if (message.startsWith(ChambersOfXeric.RAID_START_MESSAGE))
 		{
-			chambersOfXeric.onRaidStarted();
+			chambersOfXeric.onRaidStarted(tick);
 			return;
 		}
 

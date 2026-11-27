@@ -15,7 +15,7 @@ public class ChambersOfXericTest
 	public void levelSplitsAreTheTimeSinceTheLevelBefore()
 	{
 		ChambersOfXeric cox = new ChambersOfXeric();
-		cox.onRaidStarted();
+		cox.onRaidStarted(0);
 		cox.onLevelCompleted("Upper", 421.0, ticks(421.0));
 		cox.onLevelCompleted("Middle", 790.2, ticks(790.2));
 		cox.onLevelCompleted("Lower", 1100.0, ticks(1100.0));
@@ -46,11 +46,11 @@ public class ChambersOfXericTest
 	public void noOlmSplitWithoutALevelOrTheRaidTime()
 	{
 		ChambersOfXeric cox = new ChambersOfXeric();
-		cox.onRaidStarted();
+		cox.onRaidStarted(0);
 		cox.onRaidCompleted(1000.0, 20000, 20000);
 		assertTrue(cox.consumeSplits().isEmpty());
 
-		cox.onRaidStarted();
+		cox.onRaidStarted(0);
 		cox.onLevelCompleted("Upper", 421.0, ticks(421.0));
 		cox.onRaidCompleted(null, 20000, 20000);
 		assertSplits(cox.consumeSplits(), new LootEvent.Split("Upper level", 421.0));
@@ -60,10 +60,10 @@ public class ChambersOfXericTest
 	public void raidStartClearsAFailedRaid()
 	{
 		ChambersOfXeric cox = new ChambersOfXeric();
-		cox.onRaidStarted();
+		cox.onRaidStarted(0);
 		cox.onLevelCompleted("Upper", 500.0, ticks(500.0));
 
-		cox.onRaidStarted();
+		cox.onRaidStarted(0);
 		cox.onLevelCompleted("Upper", 400.0, ticks(400.0));
 		cox.onRaidCompleted(900.0, 20000, 20000);
 
@@ -122,7 +122,7 @@ public class ChambersOfXericTest
 	public void roomsComeInOrderBeforeTheirLevel()
 	{
 		ChambersOfXeric cox = new ChambersOfXeric();
-		cox.onRaidStarted();
+		cox.onRaidStarted(0);
 		// Tekton cleared 3:38.40 in, Ice demon 4:00 later
 		cox.onRoomCompleted("Tekton", 364);
 		cox.onRoomCompleted("Ice demon", 764);

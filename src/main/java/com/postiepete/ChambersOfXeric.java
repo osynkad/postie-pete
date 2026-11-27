@@ -61,9 +61,12 @@ class ChambersOfXeric
 		return matcher.find() ? PostiePetePlugin.parseKillTime(matcher) : null;
 	}
 
-	void onRaidStarted()
+	/**
+	 * Called on the raid's start message, with the tick it came on.
+	 */
+	void onRaidStarted(int tick)
 	{
-		splits.onRunStarted();
+		splits.onRunStarted(tick);
 		lastLevelEnd = 0.0;
 		levelSeen = false;
 		roomStartTicks = 0;
@@ -121,6 +124,19 @@ class ChambersOfXeric
 	List<LootEvent.Split> consumeSplits()
 	{
 		return splits.consumeSplits();
+	}
+
+	/**
+	 * The tick the raid started, or null if its start wasn't seen. Read before {@link #consumeSplits}.
+	 */
+	Integer startTick()
+	{
+		return splits.startTick();
+	}
+
+	void onLogout()
+	{
+		splits.onLogout();
 	}
 
 	/**

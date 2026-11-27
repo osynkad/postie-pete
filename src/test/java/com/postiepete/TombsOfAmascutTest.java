@@ -18,10 +18,10 @@ public class TombsOfAmascutTest
 	public void challengesComeInOrderAndTheWardensCompleteTheRaid()
 	{
 		TombsOfAmascut toa = new TombsOfAmascut();
-		assertTrue(toa.onChallengeMessage(challenge("Path of Het", "2:10.20", "2:10.20"), 300));
-		assertTrue(toa.onChallengeMessage(challenge("Akkha", "1:47.40", "3:57.60"), 300));
-		assertTrue(toa.onChallengeMessage(challenge("Path of Scabaras", "2:00", "5:57.60"), 300));
-		assertTrue(toa.onChallengeMessage(Text.removeTags(WARDENS), 300));
+		assertTrue(toa.onChallengeMessage(challenge("Path of Het", "2:10.20", "2:10.20"), 300, 0));
+		assertTrue(toa.onChallengeMessage(challenge("Akkha", "1:47.40", "3:57.60"), 300, 0));
+		assertTrue(toa.onChallengeMessage(challenge("Path of Scabaras", "2:00", "5:57.60"), 300, 0));
+		assertTrue(toa.onChallengeMessage(Text.removeTags(WARDENS), 300, 0));
 		// A new raid can't start before the chest is opened: later messages don't change the completed one
 		assertEquals(Integer.valueOf(300), toa.consumeInvocation());
 		assertNull(toa.consumeInvocation());
@@ -38,10 +38,10 @@ public class TombsOfAmascutTest
 	public void theFirstChallengeOfARaidClearsAFailedOne()
 	{
 		TombsOfAmascut toa = new TombsOfAmascut();
-		toa.onChallengeMessage(challenge("Path of Apmeken", "2:35", "2:35"), 150);
-		toa.onChallengeMessage(challenge("Ba-Ba", "1:30", "4:05"), 150);
+		toa.onChallengeMessage(challenge("Path of Apmeken", "2:35", "2:35"), 150, 0);
+		toa.onChallengeMessage(challenge("Ba-Ba", "1:30", "4:05"), 150, 0);
 		// Wiped, and started again: its total is its own time
-		toa.onChallengeMessage(challenge("Path of Crondis", "1:50.40", "1:50.40"), 150);
+		toa.onChallengeMessage(challenge("Path of Crondis", "1:50.40", "1:50.40"), 150, 0);
 
 		List<LootEvent.Split> splits = toa.consumeSplits();
 		assertEquals(1, splits.size());
@@ -54,15 +54,29 @@ public class TombsOfAmascutTest
 		TombsOfAmascut toa = new TombsOfAmascut();
 		assertNull(toa.consumePoints());
 
-		toa.onChallengeMessage(challenge("Path of Het", "2:10.20", "2:10.20"), 300);
+		toa.onChallengeMessage(challenge("Path of Het", "2:10.20", "2:10.20"), 300, 0);
 		toa.onPersonalPoints(18450);
 		assertEquals(new LootEvent.Points(null, 18450), toa.consumePoints());
 		assertNull(toa.consumePoints());
 
 		// A raid's points don't carry over to the next one
 		toa.onPersonalPoints(9000);
-		toa.onChallengeMessage(challenge("Path of Crondis", "1:50.40", "1:50.40"), 300);
+		toa.onChallengeMessage(challenge("Path of Crondis", "1:50.40", "1:50.40"), 300, 0);
 		assertNull(toa.consumePoints());
+	}
+
+	@Test
+	public void theRaidStartedTheFirstChallengesTimeBeforeItsMessage()
+	{
+		TombsOfAmascut toa = new TombsOfAmascut();
+		toa.onChallengeMessage(challenge("Path of Het", "2:00", "2:00"), 300, 1000);
+		toa.onChallengeMessage(challenge("Akkha", "1:47.40", "3:47.40"), 300, 1500);
+		toa.onChallengeMessage(Text.removeTags(WARDENS), 300, 3000);
+
+		// 2:00 is 200 ticks. Kept for the chest after the raid is completed.
+		assertEquals(Integer.valueOf(800), toa.startTick());
+		toa.onLogout();
+		assertNull(toa.startTick());
 	}
 
 	@Test
@@ -89,8 +103,8 @@ public class TombsOfAmascutTest
 		TombsOfAmascut toa = new TombsOfAmascut();
 		assertFalse(toa.onChallengeMessage(Text.removeTags(
 			"Challenge complete: Ocellus. Duration: <col=ef1020>2:25.80</col>. Total: <col=ef1020>2:25.80</col>"
-				+ " (new personal best)"), 0));
-		assertFalse(toa.onChallengeMessage("Challenge started: Archive Guardian.", 0));
+				+ " (new personal best)"), 0, 0));
+		assertFalse(toa.onChallengeMessage("Challenge started: Archive Guardian.", 0, 0));
 		assertTrue(toa.consumeSplits().isEmpty());
 	}
 

@@ -35,23 +35,45 @@ public class TheatreOfBloodTest
 	@Test
 	public void colosseumWaveIsNotARoom()
 	{
-		assertFalse(new TheatreOfBlood().onRoomMessage("Wave 2 completed! Wave duration: 1:09.60"));
+		assertFalse(new TheatreOfBlood().onRoomMessage("Wave 2 completed! Wave duration: 1:09.60", 0));
 	}
 
 	@Test
 	public void theFirstRoomStartsANewRun()
 	{
 		TheatreOfBlood tob = new TheatreOfBlood();
-		assertTrue(tob.onRoomMessage("Wave 'The Maiden of Sugadinti' (Normal Mode) complete!Duration: 2:30Total: 2:30"));
-		assertTrue(tob.onRoomMessage("Wave 'The Pestilent Bloat' (Normal Mode) complete!Duration: 1:00Total: 3:30"));
+		assertTrue(tob.onRoomMessage("Wave 'The Maiden of Sugadinti' (Normal Mode) complete!Duration: 2:30Total: 2:30", 0));
+		assertTrue(tob.onRoomMessage("Wave 'The Pestilent Bloat' (Normal Mode) complete!Duration: 1:00Total: 3:30", 0));
 		// Wiped, and started again
-		tob.onRoomMessage("Wave 'The Maiden of Sugadinti' (Normal Mode) complete!Duration: 2:05.40Total: 2:05.40");
-		tob.onRoomMessage("Wave 'Xarpus' (Normal Mode) complete!Duration: 3:06.60Total: 5:12");
+		tob.onRoomMessage("Wave 'The Maiden of Sugadinti' (Normal Mode) complete!Duration: 2:05.40Total: 2:05.40", 0);
+		tob.onRoomMessage("Wave 'Xarpus' (Normal Mode) complete!Duration: 3:06.60Total: 5:12", 0);
 
 		List<LootEvent.Split> splits = tob.consumeSplits();
 		assertEquals(2, splits.size());
 		assertEquals(new LootEvent.Split("The Maiden of Sugadinti", 125.4), splits.get(0));
 		assertEquals(new LootEvent.Split("Xarpus", 186.6), splits.get(1));
+	}
+
+	@Test
+	public void theRaidStartedTheFirstRoomsTimeBeforeItsMessage()
+	{
+		TheatreOfBlood tob = new TheatreOfBlood();
+		tob.onRoomMessage("Wave 'The Maiden of Sugadinti' (Normal Mode) complete!Duration: 2:30Total: 2:30", 1000);
+		tob.onRoomMessage("Wave 'The Pestilent Bloat' (Normal Mode) complete!Duration: 1:00Total: 3:30", 1300);
+
+		// 2:30 is 250 ticks
+		assertEquals(Integer.valueOf(750), tob.startTick());
+		tob.consumeSplits();
+		assertNull(tob.startTick());
+	}
+
+	@Test
+	public void noStartWithoutTheFirstRoom()
+	{
+		TheatreOfBlood tob = new TheatreOfBlood();
+		tob.onRoomMessage("Wave 'Xarpus' (Normal Mode) complete!Duration: 3:06.60Total: 5:12", 1000);
+
+		assertNull(tob.startTick());
 	}
 
 	@Test

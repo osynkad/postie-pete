@@ -26,14 +26,14 @@ public class PostieEventTest
 
 	private static final List<String> SOURCE_FIELDS = Arrays.asList(
 		"name", "lootName", "npcId", "killCount", "duration", "personalBest", "newPersonalBest", "wave", "splits",
-		"points", "invocation");
+		"damage", "totalDamage", "points", "invocation");
 
 	@Test
 	public void lootEventHasOnlyLootFields()
 	{
 		JsonObject json = toJson(new LootEvent(COMMON,
 			LootEvent.Source.of("Mad Angel", new LootEvent.Kill("Mad Angel", 212), 16305,
-				new LootEvent.KillTime(48.6, 41.2, false), null, null),
+				new LootEvent.KillTime(48.6, 41.2, false), null, null).withDamageOf(new DamageLog.Damage(415, 1200)),
 			Collections.singletonList(new LootEvent.Drop(536, "Dragon bones", 2, 2450)), null, null));
 
 		assertEquals(with(COMMON_FIELDS, "source", "drops", "playerItems", "team"), json.keySet());
@@ -51,6 +51,8 @@ public class PostieEventTest
 		assertEquals(false, source.get("newPersonalBest").getAsBoolean());
 		assertEquals(true, source.get("wave").isJsonNull());
 		assertEquals(true, source.get("splits").isJsonNull());
+		assertEquals(415, source.get("damage").getAsInt());
+		assertEquals(1200, source.get("totalDamage").getAsInt());
 		assertEquals(true, json.get("playerItems").isJsonNull());
 		assertEquals(true, json.get("team").isJsonNull());
 		JsonObject drop = json.getAsJsonArray("drops").get(0).getAsJsonObject();
